@@ -59,9 +59,6 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 	
 	WORD width, height;
 	BYTE GCT, back_color, pixel_ratio; 
-// A:	GCT follows for 256 colors with resolution 3 x 8 bits/primary; the lowest 3 bits represent the bit depth minus 1, the highest true bit means that the GCT is present
-// B:     00           0            - background color #0
-// C:     00                        - default pixel aspect ratio
 	
 	DWORD head_pre;
 	WORD head_post;
@@ -85,7 +82,7 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 	if ( head_pre != 0x47494638 //dec: GIF8
 			|| head_post != 0x3961 ) { //dec: 9a
 		fprintf(stderr, "Not right head of GIF file\n");
-		return 1;
+		return -1;
 	}
 	
 	fread(&width, sizeof(WORD), 1, inputFile);
@@ -93,9 +90,14 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 	
 	printf("%d (%x) %d (%x)\n",width,width,height,height);
 	
-	fread(&GCT, sizeof(BYTE), 1, inputFile);
+	fread(&GCT, sizeof(BYTE), 1, inputFile);	//Global Color Table specification
 	fread(&back_color, sizeof(BYTE), 1, inputFile);
 	fread(&pixel_ratio, sizeof(BYTE), 1, inputFile);
+// 6:     03 00        3            - logical screen width in pixels
+// 8:     05 00        5            - logical screen height in pixels
+// A:     F7                        - GCT follows for 256 colors with resolution 3 x 8 bits/primary; the lowest 3 bits represent the bit depth minus 1, the highest true bit means that the GCT is present
+// B:     00           0            - background color #0
+// C:     00                        - default pixel aspect ratio
 	
 	printf("%d (%x) %d (%x) %d (%x)\n",GCT,GCT,back_color,back_color,pixel_ratio,pixel_ratio);
 	
@@ -105,7 +107,7 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 		fread(&color.cGreen, sizeof(BYTE), 1, inputFile);
 		fread(&color.cBlue, sizeof(BYTE), 1, inputFile);
 		
-		if ( !(color.cRed == 0x21 && color.cGreen == 0xF9 ) ) {
+		if ( 0 && !(color.cRed == 0x21 && color.cGreen == 0xF9 ) ) {
 			printf("%d (%x) %d (%x) %d (%x)\n",color.cRed,color.cRed,color.cGreen,color.cGreen,color.cBlue,color.cBlue);
 		}
 	} while ( !(color.cRed == 0x21 && color.cGreen == 0xF9 ) );
@@ -140,7 +142,7 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 	
 	if ( imageDesc != 0x2c ) {
 		fprintf(stderr, "Not right Image Descriptor of GIF file\n");
-		return 1;
+		return -1;
 	}
 	
 	fread(&NWCorner, sizeof(DWORD), 1, inputFile);
@@ -157,25 +159,38 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 	BYTE LZWMinSize, bytesOfEncData;
 	
 	fread(&LZWMinSize, sizeof(BYTE), 1, inputFile);
-	fread(&bytesOfEncData, sizeof(BYTE), 1, inputFile);
 	
-	printf("%d (%x) %d (%x)\n",LZWMinSize,LZWMinSize,bytesOfEncData,bytesOfEncData);
+	printf("%d (%x)",LZWMinSize,LZWMinSize);
+	
+	do {
+		fread(&bytesOfEncData, sizeof(BYTE), 1, inputFile);
+		
+		printf(", %d (%x)",bytesOfEncData,bytesOfEncData);
 // 31F:   08           8           Start of image - LZW minimum code size
 // 320:   0B          11            - 11 bytes of LZW encoded image data follow
 
-	for (int i = 0; i < bytesOfEncData; i++) {
-		fread(&tmp, sizeof(BYTE), 1, inputFile);
-		printf("%x ",tmp);
-	}
-	printf("\n");	
+		for (int i = 0; i < bytesOfEncData; i++) {
+			fread(&tmp, sizeof(BYTE), 1, inputFile);
+			//printf("%x ",tmp);
+		}
+		//printf("\n");	
 // 321:   00 51 FC 1B 28 70 A0 C1 83 01 01
+	} while ( bytesOfEncData == 0xFF || bytesOfEncData == 0xFE );
 
-	fread(&endOfImgData, sizeof(BYTE), 1, inputFile);
+	printf("\n");
+	
+	int x = -1;
+
+	do {
+		x++;
+		fread(&endOfImgData, sizeof(BYTE), 1, inputFile);
+	} while (endOfImgData != 0x00);
+	
 	if ( endOfImgData != 0x00 ) {
 		fprintf(stderr, "Not right end of image data of GIF file\n");
-		return 1;
+		return -1;
 	}
-	printf("End (00): %x\n",endOfImgData);
+	printf("End (00): %x - %d\n",endOfImgData,x);
 // 32C:   00                        - end of image data
 
 	fread(&term, sizeof(BYTE), 1, inputFile);
@@ -185,9 +200,10 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 	
 	if ( term != 0x3B ) {
 		fprintf(stderr, "Not right ending of GIF file\n");
-		return 1;
+		return -1;
 	}
 	
+	return 1;
 	//////////////////////////////
 	// Create BMP file
 	//////////////////////////////
