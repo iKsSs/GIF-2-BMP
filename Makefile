@@ -7,7 +7,7 @@ DIR := kko.proj3.xpastu00
 
 DEBUG_NAME := gif2bmp_debug
 
-.PHONY: all clean
+.PHONY: all clean test
 
 all: $(PROG_NAME)
 
@@ -18,6 +18,9 @@ $(PROG_NAME):
 
 debug:
 	$(CC) -ggdb3 $(SOURCE) -o $(DEBUG_NAME)
+
+test:
+	./$(PROG_NAME) -i ./test/easy.gif -o test.bmp 
 
 pack:
 	mkdir -p ./$(DIR)

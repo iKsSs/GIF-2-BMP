@@ -20,6 +20,10 @@ typedef int32_t LONG;   // 4 B
 typedef uint16_t WORD;  // 2 B
 typedef uint8_t BYTE;   // 1 B
 
+//Hack to repair incorrect field sizes
+//https://stackoverflow.com/questions/27215610/creating-bmp-file-in-c
+//author: Weather Vane
+//date: Nov 30 2014
 #pragma pack(push, 1)
 
 typedef struct tagBITMAPFILEHEADER {
@@ -63,7 +67,7 @@ typedef struct{
 
 int isBigEndian();
 
-void toLittleEndian(const long long int size, WORD *value);
+void toLittleEndian(const long long int size, void *value);
 
 /* gif2bmp – záznam o převodu
 inputFile – vstupní soubor (GIF)
