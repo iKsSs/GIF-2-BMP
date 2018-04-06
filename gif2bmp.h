@@ -12,14 +12,32 @@
 #include <string.h>
 #include <stdint.h>
 
+#include <math.h>
+
 #define BI_RGB 0
-#define SHOW_HEADER 1
-#define SHOW_RGB_TABLE 0
-#define SHOW_GCE 1
-#define SHOW_IMG_DESC 1
-#define SHOW_DATA_SIZE 1
-#define SHOW_DATA 0
-#define SHOW_END 1
+
+#define SHOW_GIF 1
+
+#ifdef SHOW_GIF
+    #define SHOW_HEADER 1
+    #define SHOW_RGB_TABLE 0
+    #define SHOW_GCE 1
+    #define SHOW_IMG_DESC 1
+    #define SHOW_DATA_SIZE 1
+    #define SHOW_DATA 1
+    #define SHOW_END 1
+#endif
+
+#define BYTE_TO_BINARY_PATTERN "%c%c%c%c%c%c%c%c"
+#define BYTE_TO_BINARY(byte)  \
+  (byte & 0x80 ? '1' : '0'), \
+  (byte & 0x40 ? '1' : '0'), \
+  (byte & 0x20 ? '1' : '0'), \
+  (byte & 0x10 ? '1' : '0'), \
+  (byte & 0x08 ? '1' : '0'), \
+  (byte & 0x04 ? '1' : '0'), \
+  (byte & 0x02 ? '1' : '0'), \
+  (byte & 0x01 ? '1' : '0') 
 
 typedef uint16_t UINT;	// 2 B
 typedef uint32_t DWORD; // 4 B

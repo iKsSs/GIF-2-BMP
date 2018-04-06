@@ -33,10 +33,8 @@ int main(int argc, char *argv[]) {
     extern char *optarg;
 
 	//parse arguments
-    while ((opt = getopt(argc, argv, "hi:o:l:")) != -1)
-    {
-        switch (opt)
-        {
+    while ((opt = getopt(argc, argv, "hi:o:l:")) != -1) {
+        switch (opt) {
         case 'h':       //display help
             printHelpMessage();
             exit(0);
@@ -94,11 +92,11 @@ int main(int argc, char *argv[]) {
 
 	gif2bmp(&record, fp_i, fp_o);
 
-	if ( inputFile != NULL && fclose(fp_o) ) {
+	if ( inputFile != NULL && fclose(fp_i) ) {
 		fprintf(stderr, "Error: closing %s file\n", inputFile);
 	}
 	
-	if ( outputFile != NULL && fclose(fp_i) ) {
+	if ( outputFile != NULL && fclose(fp_o) ) {
 		fprintf(stderr, "Error: closing %s file\n", outputFile);
 	}
 

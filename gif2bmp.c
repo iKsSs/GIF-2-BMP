@@ -65,7 +65,11 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 	BYTE imageDesc;
 	BYTE endOfImgData;
 	BYTE term;
+
+	BYTE hasGlobalTable, colorResolution, sizeOfGlobalTable;
 	
+	int i, j;
+
 	//////////////////////////////
 	// Read GIF file
 	//////////////////////////////
@@ -87,8 +91,8 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 		return -1;
 	}
 	
-	fread(&width, sizeof(WORD), 1, inputFile);
-	fread(&height, sizeof(WORD), 1, inputFile);
+	fread(&width, sizeof(WORD), 1, inputFile);	//canvas width
+	fread(&height, sizeof(WORD), 1, inputFile);	//canvas height
 	
 	fread(&GCT, sizeof(BYTE), 1, inputFile);	//Global Color Table specification
 	fread(&back_color, sizeof(BYTE), 1, inputFile);
@@ -99,6 +103,10 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 // B:     00           0            - background color #0
 // C:     00                        - default pixel aspect ratio
 
+	hasGlobalTable		= (0x80 & GCT) >> 8;
+	colorResolution		= (0x70 & GCT) >> 4;
+	sizeOfGlobalTable	= pow (2, (0x07 & GCT) + 1 );
+
 #if SHOW_HEADER
 	printf("Width\tHeight\tGCT\t\tback_color\tpixel_ratio\n");
 	printf("%d (%X)\t%d (%X)\t%d (%X)\t%d (%X)\t\t%d (%X)\n",width,width,height,height,GCT,GCT,back_color,back_color,pixel_ratio,pixel_ratio);
@@ -108,30 +116,38 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 	printf("RGB table:\nRed\tGreen\tBlue\n");
 #endif
 
-	do {
-		//Read color table
-		fread(&color.cRed, sizeof(BYTE), 1, inputFile);
-		fread(&color.cGreen, sizeof(BYTE), 1, inputFile);
-		fread(&color.cBlue, sizeof(BYTE), 1, inputFile);
+	WORD order = 0;
 
-#if SHOW_RGB_TABLE			
-		if ( !(color.cRed == 0x21 && color.cGreen == 0xF9 ) ) {
-			printf("%d (%X)\t%d (%X)\t%d (%X)\n",color.cRed,color.cRed,color.cGreen,color.cGreen,color.cBlue,color.cBlue);
+	if ( hasGlobalTable ) {
+		for (i = 0; i < sizeOfGlobalTable; ++i) {
+			//Read color table
+			fread(&color.cRed, sizeof(BYTE), 1, inputFile);
+			fread(&color.cGreen, sizeof(BYTE), 1, inputFile);
+			fread(&color.cBlue, sizeof(BYTE), 1, inputFile);
+
+	#if SHOW_RGB_TABLE
+			//printf("%2X\t%d (%X)\t%d (%X)\t%d (%X)\n",order++,color.cRed,color.cRed,color.cGreen,color.cGreen,color.cBlue,color.cBlue);
+			printf("%2X\t%X\t%X\t%X\n",order++,color.cRed,color.cGreen,color.cBlue);
+	#endif
 		}
-#endif
-	} while ( !(color.cRed == 0x21 && color.cGreen == 0xF9 ) );
+	}
 
 	BYTE GCE, transparency, transparentColor, endOfBlock;
 	WORD delay;
-	
-	GCE = color.cBlue;
-	
+	/*
+	fread(&GCE, sizeof(BYTE), 1, inputFile);
 	fread(&transparency, sizeof(BYTE), 1, inputFile);
 	fread(&delay, sizeof(WORD), 1, inputFile);
 	fread(&transparentColor, sizeof(BYTE), 1, inputFile);
 	fread(&endOfBlock, sizeof(BYTE), 1, inputFile);
 
 #if SHOW_GCE
+	if ( hasGlobalTable ) {
+		printf("Size of global table: %d\n",sizeOfGlobalTable);
+	} else {
+		printf("No global table\n");
+	}
+	printf("Color resolution: %d bits/pixel\n", colorResolution+1);
 	printf("------------------\n");
 	printf("GCE (21F9): %X%X\n", color.cRed, color.cGreen);
 	printf("GCE_dat\ttransp.\tdelay\ttransp_col\tEOB\n");
@@ -144,11 +160,13 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 // 311:   00 00                     - delay for animation in hundredths of a second: not used
 // 313:   10          16            - color #16 is transparent
 // 314:   00                        - end of GCE block
-
+*/
 	DWORD NWCorner;
 	BYTE localColorTable;
 
 	WORD imageWidth, imageHeight;
+
+	BYTE hasLocalTable, sizeOfLocalTable;
 	
 	fread(&imageDesc, sizeof(BYTE), 1, inputFile);
 
@@ -167,14 +185,34 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 	fread(&imageHeight, sizeof(WORD), 1, inputFile);
 	fread(&localColorTable, sizeof(BYTE), 1, inputFile);
 
+	hasLocalTable 		= (0x80 & localColorTable) >> 7;
+	sizeOfLocalTable	= pow (2, (0x07 & localColorTable) + 1 );
+
 #if SHOW_IMG_DESC	
-	printf("NWcor\timgW\timgH\tlocalColorTable\n");
-	printf("%d (%X)\t%d (%X)\t%d (%X)\t%d (%X)\n",NWCorner,NWCorner,imageWidth,imageWidth,imageHeight,imageHeight,localColorTable,localColorTable);
+	printf("NWcor\timgW\timgH\tlocalColorTable\tlocalTable\tsizeOfLocalTable\n");
+	printf("%d (%X)\t%d (%X)\t%d (%X)\t%d (%X - "BYTE_TO_BINARY_PATTERN")\t%d\t%d\n",
+		NWCorner,NWCorner,imageWidth,imageWidth,imageHeight,imageHeight,localColorTable,localColorTable,BYTE_TO_BINARY(localColorTable),hasLocalTable,sizeOfLocalTable);
 #endif
 // 315:   2C                       Image Descriptor
 // 316:   00 00 00 00 (0,0)         - NW corner position of image in logical screen
 // 31A:   03 00 05 00 (3,5)         - image width and height in pixels
 // 31E:   00                        - no local color table
+
+	order = 0;
+
+	if ( hasLocalTable ) {
+		for (i = 0; i < sizeOfLocalTable; ++i) {
+			//Read color table
+			fread(&color.cRed, sizeof(BYTE), 1, inputFile);
+			fread(&color.cGreen, sizeof(BYTE), 1, inputFile);
+			fread(&color.cBlue, sizeof(BYTE), 1, inputFile);
+
+	#if SHOW_RGB_TABLE
+			//printf("%2X\t%d (%X)\t%d (%X)\t%d (%X)\n",order++,color.cRed,color.cRed,color.cGreen,color.cGreen,color.cBlue,color.cBlue);
+			printf("%2X\t%X\t%X\t%X\n",order++,color.cRed,color.cGreen,color.cBlue);
+	#endif
+		}
+	}
 
 	BYTE LZWMinSize, bytesOfEncData;
 	
@@ -187,7 +225,9 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 	printf("%d (%X)\n",LZWMinSize,LZWMinSize);
 #endif	
 
+#if SHOW_DATA_SIZE && !SHOW_DATA
 	int first = 1;
+#endif
 
 	do {
 		fread(&bytesOfEncData, sizeof(BYTE), 1, inputFile);
@@ -222,7 +262,7 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 #endif
 	} while ( bytesOfEncData == 0xFF || bytesOfEncData == 0xFE );
 
-#if !SHOW_DATA	
+#if SHOW_GIF && !SHOW_DATA	
 		printf("\n");
 #endif
 
@@ -256,10 +296,12 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 		return -1;
 	}
 
+//Get file size using standard library
+//URL: https://stackoverflow.com/questions/238603/how-can-i-get-a-files-size-in-c
+//Author: Greg Hewgill on 26 Oct 2008
 	fseek(inputFile, 0, SEEK_END); // seek to end of file
 	gif2bmp->gifSize = ftell(inputFile); // get current file pointer
 
-	return 1;
 	//////////////////////////////
 	// Create BMP file
 	//////////////////////////////
@@ -301,15 +343,13 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 		//toLittleEndian(4, &bfh.bfSize);
 	
 	gif2bmp->bmpSize = bfh.bfSize;
-	
+
 	//write BMP header to outputFile
 	fwrite(&bfh, sizeof(BITMAPFILEHEADER), 1, outputFile);
 	fwrite(&bih, sizeof(BITMAPINFOHEADER), 1, outputFile);
-	
+
 //		printf("%d %d %d\n%d %d %d %d %d\n", sizeof(BITMAPINFOHEADER), sizeof(BITMAPFILEHEADER), sizeof(COLORREF_RGB),
 //											sizeof(UINT), sizeof(DWORD), sizeof(LONG), sizeof(WORD), sizeof(BYTE));
-	
-	int i, j;
 	
 	for(i = 0; i < bih.biHeight; i++)
 	{
@@ -325,8 +365,8 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 			fwrite(&padding, sizeof(BYTE), 1, outputFile);
 		}
 	}
-	
-	fseek(outputFile, 0, SEEK_END); // seek to end of file
+
+	//fseek(outputFile, 0, SEEK_END); // seek to end of file
 	gif2bmp->bmpSize = ftell(outputFile); // get current file pointer
 
 	return 0;

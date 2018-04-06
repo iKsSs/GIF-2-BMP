@@ -14,7 +14,7 @@ all: $(PROG_NAME)
 rebuild: clean all
 
 $(PROG_NAME):
-	$(CC) $(CFLAGS) $(SOURCE) -o $@
+	$(CC) $(CFLAGS) $(SOURCE) -o $@ -lm
 
 debug:
 	$(CC) -ggdb3 $(SOURCE) -o $(DEBUG_NAME)
