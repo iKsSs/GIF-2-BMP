@@ -28,7 +28,6 @@ int main(int argc, char *argv[]) {
 	FILE *fp_i, *fp_o, *fp_l;
 	
 	tGIF2BMP record;
-	int uncodedSize, codedSize;
 	
     int opt;
     extern char *optarg;
@@ -94,7 +93,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	gif2bmp(&record, fp_i, fp_o);
-	
+
 	if ( inputFile != NULL && fclose(fp_o) ) {
 		fprintf(stderr, "Error: closing %s file\n", inputFile);
 	}
@@ -105,8 +104,8 @@ int main(int argc, char *argv[]) {
 
 	if ( logFile != NULL ) {
 		fprintf(fp_l, "login = xpastu00\n");
-		fprintf(fp_l, "uncodedSize = %d\n", uncodedSize);	//v bytech
-		fprintf(fp_l, "codedSize = %d\n", codedSize);		//v bytech
+		fprintf(fp_l, "uncodedSize = %ld\n", record.gifSize);	//v bytech
+		fprintf(fp_l, "codedSize = %ld\n", record.bmpSize);		//v bytech
 
 		if ( fclose(fp_l) ) {
 			fprintf(stderr, "Error: closing %s file\n", logFile);

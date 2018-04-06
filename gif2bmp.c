@@ -100,7 +100,7 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 // C:     00                        - default pixel aspect ratio
 
 #if SHOW_HEADER
-	printf("Width\tHeight\tGCT\t\tback_color\tpixel_ration\n");
+	printf("Width\tHeight\tGCT\t\tback_color\tpixel_ratio\n");
 	printf("%d (%X)\t%d (%X)\t%d (%X)\t%d (%X)\t\t%d (%X)\n",width,width,height,height,GCT,GCT,back_color,back_color,pixel_ratio,pixel_ratio);
 #endif
 
@@ -255,7 +255,10 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 		fprintf(stderr, "Not right ending of GIF file\n");
 		return -1;
 	}
-	
+
+	fseek(inputFile, 0, SEEK_END); // seek to end of file
+	gif2bmp->gifSize = ftell(inputFile); // get current file pointer
+
 	return 1;
 	//////////////////////////////
 	// Create BMP file
@@ -323,5 +326,8 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 		}
 	}
 	
+	fseek(outputFile, 0, SEEK_END); // seek to end of file
+	gif2bmp->bmpSize = ftell(outputFile); // get current file pointer
+
 	return 0;
 }
