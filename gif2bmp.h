@@ -13,6 +13,13 @@
 #include <stdint.h>
 
 #define BI_RGB 0
+#define SHOW_HEADER 1
+#define SHOW_RGB_TABLE 0
+#define SHOW_GCE 1
+#define SHOW_IMG_DESC 1
+#define SHOW_DATA_SIZE 1
+#define SHOW_DATA 0
+#define SHOW_END 1
 
 typedef uint16_t UINT;	// 2 B
 typedef uint32_t DWORD; // 4 B

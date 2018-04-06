@@ -25,7 +25,7 @@ int main(int argc, char *argv[]) {
 	char *outputFile = NULL;
 	char *logFile = NULL;
 
-	FILE *fp_i, *fp_o;
+	FILE *fp_i, *fp_o, *fp_l;
 	
 	tGIF2BMP record;
 	int uncodedSize, codedSize;
@@ -84,6 +84,15 @@ int main(int argc, char *argv[]) {
 		} 
 	}
 
+	//open log file
+	if ( logFile != NULL ) {
+		fp_l = fopen(logFile,"w");
+		
+		if ( fp_l == NULL ) {
+			fprintf(stderr, "Error: openning %s file\n", logFile);
+		} 
+	}
+
 	gif2bmp(&record, fp_i, fp_o);
 	
 	if ( inputFile != NULL && fclose(fp_o) ) {
@@ -94,11 +103,15 @@ int main(int argc, char *argv[]) {
 		fprintf(stderr, "Error: closing %s file\n", outputFile);
 	}
 
-	// printf("login = xpastu00\n");
-	// printf("uncodedSize = %d\n", uncodedSize);	//v bytech
-	// printf("codedSize = %d\n", codedSize);		//v bytech
-	
-	printf("Success\n");
+	if ( logFile != NULL ) {
+		fprintf(fp_l, "login = xpastu00\n");
+		fprintf(fp_l, "uncodedSize = %d\n", uncodedSize);	//v bytech
+		fprintf(fp_l, "codedSize = %d\n", codedSize);		//v bytech
+
+		if ( fclose(fp_l) ) {
+			fprintf(stderr, "Error: closing %s file\n", logFile);
+		}
+	}
 	
 	return 0;
 }
@@ -106,8 +119,8 @@ int main(int argc, char *argv[]) {
 //Print help message with usage
 void printHelpMessage() {
     printf("Usage: gif2bmp -i <input_file> -o <output_file>\n" \
-           "\t-i\tinput *.gif file (default value: stdin)\n" \
-           "\t-o\toutput *.bmp file (default value: stdout)\n" \
-		   "\t-l\tlog file\n" \
-           "\t-h\thelp\n");
+           "\t-i <file>\tinput *.gif file (default value: stdin)\n" \
+           "\t-o <file>\toutput *.bmp file (default value: stdout)\n" \
+		   "\t-l <file>\tlog file\n" \
+           "\t-h\t\thelp\n");
 }
