@@ -9,9 +9,8 @@
 
 #include "gif2bmp.h"
 
-//http://blog.acipo.com/handling-endianness-in-c/
-//author: Andrew Ippoliti
-//date: 23 Nov 2013
+//URL: http://blog.acipo.com/handling-endianness-in-c/
+//Author: Andrew Ippoliti on 23 Nov 2013
 
 //Check if system is in Big endian
 //return	int		1 - is Big endian | 0 - is Little endian
@@ -26,22 +25,30 @@ int isBigEndian() {
 //params	size	size of number in bytes
 //			value	reference to the number
 //return	void
-void toLittleEndian(const long long int size, void *value){
+void toLittleEndian(const long long int size, void *value) {
     int i;
     char result[32];
-    for( i=0; i<size; i+=1 ){
+    for( i=0; i<size; i+=1 ) {
         result[i] = ((char*)value)[size-i-1];
     }
-	for( i=0; i<size; i+=1 ){
+	for( i=0; i<size; i+=1 ) {
         ((char*)value)[i] = result[i];
     }
 }
 
-// GIF
-    // An image (introduced by 0x2C, an ASCII comma ',')
-    // An extension block (introduced by 0x21, an ASCII exclamation point '!')
-    // The trailer (a single byte of value 0x3B, an ASCII semicolon ';'), which should be the last byte of the file.
-
+//Write debug messages conditioned by define constants
+//URL: https://stackoverflow.com/questions/21758136/write-debug-messages-in-c-to-a-file
+//Author: unwind on 13 Feb 2014
+static inline void printDebug(const int show, const char *fmt, ...) {
+#ifdef DEBUG
+	if ( show ) {
+		va_list args;
+		va_start(args, fmt);
+		vfprintf(stdout,fmt, args);
+		va_end(args);
+	}	
+#endif
+}
 
 //Function to convert GIF file to BMP file
 //params	gif2bmp	
@@ -49,7 +56,10 @@ void toLittleEndian(const long long int size, void *value){
 //			outputFile	file descriptor to output BMP file
 //return	int			(un)successful conversion
 int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
-	
+
+//////////////////////////////
+// Variable declarations
+//////////////////////////////	
 	//Header
 	DWORD head_pre;
 	WORD head_post;
@@ -73,7 +83,7 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 	WORD order;
 
 	//{Plain Text, Comment, Application Extension} Extension
-	WORD length;
+	BYTE length;
 	BYTE c;
 
 	//Image Descriptor
@@ -83,8 +93,7 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 	WORD sizeOfLocalTable;
 
 	//Image Data
-	BYTE LZWMinSize;
-	WORD bytesOfEncData;
+	BYTE LZWMinSize, bytesOfEncData;
 	BYTE tmp;
 
 	//auxiliary
@@ -104,9 +113,7 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 	toLittleEndian(4, &head_pre);
 	toLittleEndian(2, &head_post);
 
-#if SHOW_HEADER	
-	printf("Head (47494638 3961): %X %X\n",head_pre,head_post);
-#endif
+	printDebug(SHOW_HEADER,"Head (47494638 3961): %X %X\n",head_pre,head_post);
 
 	if ( head_pre != 0x47494638 //dec: GIF8
 			|| head_post != 0x3961 ) { //dec: 9a
@@ -129,25 +136,21 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 	colorResolution		= (0x70 & GCT) >> 4;
 	sizeOfGlobalTable	= pow (2, (0x07 & GCT) + 1 );
 
-#if SHOW_HEADER
-	printf("CanvasW\tCanvasH\tGCT\t\tback_color\tpixel_ratio\n");
-	printf("%d (%X)\t%d (%X)\t%X - "BYTE_TO_BINARY_PATTERN"\t%d (%X)\t\t%d (%X)\n",
+	printDebug(SHOW_HEADER,"CanvasW\tCanvasH\tGCT\t\tback_color\tpixel_ratio\n");
+	printDebug(SHOW_HEADER,"%d (%X)\t%d (%X)\t%X - "BYTE_TO_BINARY_PATTERN"\t%d (%X)\t\t%d (%X)\n",
 		canvasWidth,canvasWidth,canvasHeight,canvasHeight,GCT,BYTE_TO_BINARY(GCT),back_color,back_color,pixel_ratio,pixel_ratio);
 	if ( hasGlobalTable ) {
-		printf("Size of global table: %d\n",sizeOfGlobalTable);
+		printDebug(SHOW_HEADER,"Size of global table: %d\n",sizeOfGlobalTable);
 	} else {
-		printf("No global table\n");
+		printDebug(SHOW_HEADER,"No global table\n");
 	}
-	printf("Color resolution: %d bits/pixel\n", colorResolution+1);
-#endif
+	printDebug(SHOW_HEADER,"Color resolution: %d bits/pixel\n", colorResolution+1);
 
 //********************************************************
 //	Global Color Table section
 //********************************************************
-
-#if SHOW_RGB_TABLE	
-	printf("RGB table:\nRed\tGreen\tBlue\n");
-#endif
+	
+	printDebug(SHOW_RGB_TABLE,"RGB table:\nRed\tGreen\tBlue\n");
 
 	if ( hasGlobalTable ) {
 		order = 0;
@@ -158,10 +161,8 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 			fread(&color.cGreen, sizeof(BYTE), 1, inputFile);
 			fread(&color.cBlue, sizeof(BYTE), 1, inputFile);
 
-#if SHOW_RGB_TABLE
-			//printf("%2X\t%d (%X)\t%d (%X)\t%d (%X)\n",order++,color.cRed,color.cRed,color.cGreen,color.cGreen,color.cBlue,color.cBlue);
-			printf("%2X\t%X\t%X\t%X\n",order++,color.cRed,color.cGreen,color.cBlue);
-#endif
+			//printDebug(SHOW_RGB_TABLE,"%2X\t%d (%X)\t%d (%X)\t%d (%X)\n",order++,color.cRed,color.cRed,color.cGreen,color.cGreen,color.cBlue,color.cBlue);
+			printDebug(SHOW_RGB_TABLE,"%2X\t%X\t%X\t%X\n",order++,color.cRed,color.cGreen,color.cBlue);
 		}
 	}
 
@@ -188,38 +189,30 @@ case 0x21:
 		fread(&transparentColor, sizeof(BYTE), 1, inputFile);
 		fread(&endOfBlock, sizeof(BYTE), 1, inputFile);
 
-#if SHOW_EXT
-		printf("------------------\n");
-		printf("GCE (21F9): %X%X\n", extension, ext_type);
-		printf("GCE_dat\ttransp.\tdelay\ttransp_col\tEOB\n");
-		printf("%d (%X)\t%d (%X)\t%d (%X)\t%d (%X)\t%d (%X)\n",
-				gce,gce,transparency,transparency,delay,delay,transparentColor,transparentColor,endOfBlock,endOfBlock);
-#endif	
+		printDebug(SHOW_EXT,"------------------\n");
+		printDebug(SHOW_EXT,"GCE (21F9): %X%X\n", extension, ext_type);
+		printDebug(SHOW_EXT,"GCE_dat\ttransp.\tdelay\ttransp_col\tEOB\n");
+		printDebug(SHOW_EXT,"%d (%X)\t%d (%X)\t%d (%X)\t%d (%X)\t%d (%X)\n",
+				gce,gce,transparency,transparency,delay,delay,transparentColor,transparentColor,endOfBlock,endOfBlock);	
 
 	} else if ( 0x01 == ext_type || 0xFE == ext_type || 0xFF == ext_type ) {
 //********************************************************
 //	{Plain Text, Comment, Application Extension} Extension section
 //********************************************************
 
-#if SHOW_EXT
-		printf("------------------\n");
-		printf("Plain text/Comment/Application (21{01,FE,FF}): %X%X\n", extension, ext_type);
-#endif	
+		printDebug(SHOW_EXT,"------------------\n");
+		printDebug(SHOW_EXT,"Plain text/Comment/Application (21{01,FE,FF}): %X%X\n", extension, ext_type);
 
 		do {
 			fread(&length, sizeof(BYTE), 1, inputFile);
 
 			for (i = 0; i < length; ++i) {
 				fread(&c, sizeof(BYTE), 1, inputFile);
-#if SHOW_EXT
-				printf("%c", c);
-#endif	
+				printDebug(SHOW_EXT,"%c", c);
 			}
 		} while (length);
 
-#if SHOW_EXT
-		printf("\n");
-#endif	
+		printDebug(SHOW_EXT,"\n");
 	}
 break;
 
@@ -228,10 +221,8 @@ case 0x2C:
 //	Image Descriptor section
 //********************************************************
 
-#if SHOW_IMG_DESC	
-	printf("------------------\n");
-	printf("ImageDesc (2C): %X\n",extension);
-#endif
+	printDebug(SHOW_IMG_DESC,"------------------\n");
+	printDebug(SHOW_IMG_DESC,"ImageDesc (2C): %X\n",extension);
 
 	if ( extension != 0x2c ) {
 		fprintf(stderr, "Not right Image Descriptor of GIF file\n");
@@ -246,11 +237,9 @@ case 0x2C:
 	hasLocalTable 		= (0x80 & localColorTable) >> 7;
 	sizeOfLocalTable	= pow (2, (0x07 & localColorTable) + 1 );
 
-#if SHOW_IMG_DESC	
-	printf("NWcor\timgW\timgH\tlocalColorTable\tlocalTable\tsizeOfLocalTable\n");
-	printf("%d (%X)\t%d (%X)\t%d (%X)\t%X - "BYTE_TO_BINARY_PATTERN"\t%d\t%d\n",
+	printDebug(SHOW_IMG_DESC,"NWcor\timgW\timgH\tlocalColorTable\tlocalTable\tsizeOfLocalTable\n");
+	printDebug(SHOW_IMG_DESC,"%d (%X)\t%d (%X)\t%d (%X)\t%X - "BYTE_TO_BINARY_PATTERN"\t%d\t%d\n",
 		NWCorner,NWCorner,imageWidth,imageWidth,imageHeight,imageHeight,localColorTable,BYTE_TO_BINARY(localColorTable),hasLocalTable,sizeOfLocalTable);
-#endif
 
 //********************************************************
 //	Local Color Table section
@@ -265,10 +254,8 @@ case 0x2C:
 			fread(&color.cGreen, sizeof(BYTE), 1, inputFile);
 			fread(&color.cBlue, sizeof(BYTE), 1, inputFile);
 
-#if SHOW_RGB_TABLE
-			//printf("%2X\t%d (%X)\t%d (%X)\t%d (%X)\n",order++,color.cRed,color.cRed,color.cGreen,color.cGreen,color.cBlue,color.cBlue);
-			printf("%2X\t%X\t%X\t%X\n",order++,color.cRed,color.cGreen,color.cBlue);
-#endif
+			//printDebug(SHOW_RGB_TABLE,"%2X\t%d (%X)\t%d (%X)\t%d (%X)\n",order++,color.cRed,color.cRed,color.cGreen,color.cGreen,color.cBlue,color.cBlue);
+			printDebug(SHOW_RGB_TABLE,"%2X\t%X\t%X\t%X\n",order++,color.cRed,color.cGreen,color.cBlue);
 		}
 	}
 
@@ -278,51 +265,37 @@ case 0x2C:
 	
 	fread(&LZWMinSize, sizeof(BYTE), 1, inputFile);
 
-#if SHOW_DATA_SIZE
-	printf("------------------\n");
-	printf("Start of Image - LZW min code size:\n");
-	printf("%d (%X)\n",LZWMinSize,LZWMinSize);
-#if !SHOW_DATA
+	printDebug(SHOW_DATA_SIZE,"------------------\n");
+	printDebug(SHOW_DATA_SIZE,"Start of Image - LZW min code size:\n");
+	printDebug(SHOW_DATA_SIZE,"%d (%X)\n",LZWMinSize,LZWMinSize);
+
 	int first = 1;
-#endif
-#endif	
 
 	do {
 		fread(&bytesOfEncData, sizeof(BYTE), 1, inputFile);
-
-#if SHOW_DATA
-	#if SHOW_DATA_SIZE		
-		printf("Bytes of enc data\n");
-		printf("%d (%X)\n",bytesOfEncData,bytesOfEncData);
-	#endif
-#else
-	#if SHOW_DATA_SIZE		
+		
+		printDebug(SHOW_DATA && SHOW_DATA_SIZE,"Bytes of enc data\n");
+		printDebug(SHOW_DATA && SHOW_DATA_SIZE,"%d (%X)\n",bytesOfEncData,bytesOfEncData);
+		
 		if ( first ) {
-			printf("Bytes of enc data\n");
-			printf("%d (%X)",bytesOfEncData,bytesOfEncData);
+			printDebug(!SHOW_DATA && SHOW_DATA_SIZE,"Bytes of enc data\n");
+			printDebug(!SHOW_DATA && SHOW_DATA_SIZE,"%d (%X)",bytesOfEncData,bytesOfEncData);
 			first = 0;
 		} else {
-			printf(", %d (%X)",bytesOfEncData,bytesOfEncData);
+			printDebug(!SHOW_DATA && SHOW_DATA_SIZE,", %d (%X)",bytesOfEncData,bytesOfEncData);
 		}
-	#endif	
-#endif
 
 		for (i = 0; i < bytesOfEncData; i++) {
 			fread(&tmp, sizeof(BYTE), 1, inputFile);
-#if SHOW_DATA
-			printf("%2X ",tmp);
-#endif
+			printDebug(SHOW_DATA,"%2X ",tmp);
 		}
-#if SHOW_DATA	
-		if ( bytesOfEncData ) {
-			printf("\n");
-		}
-#endif
-	} while ( 0x00 != bytesOfEncData );
 
-#if SHOW_GIF && !SHOW_DATA	
-	printf("\n");
-#endif
+		if ( bytesOfEncData ) {
+			printDebug(SHOW_DATA,"\n");
+		}
+	} while ( 0x00 != bytesOfEncData );
+	
+	printDebug(SHOW_GIF && !SHOW_DATA,"\n");
 
 break;
 
@@ -331,10 +304,8 @@ case 0x3B:
 //********************************************************
 //	Trailer section
 //********************************************************
-
-#if SHOW_END	
-	printf("Term (3B): %X\n",extension);
-#endif	
+	
+	printDebug(SHOW_END,"Term (3B): %X\n",extension);
 
 break;
 
@@ -402,8 +373,8 @@ default:
 	fwrite(&bfh, sizeof(BITMAPFILEHEADER), 1, outputFile);
 	fwrite(&bih, sizeof(BITMAPINFOHEADER), 1, outputFile);
 
-//		printf("%d %d %d\n%d %d %d %d %d\n", sizeof(BITMAPINFOHEADER), sizeof(BITMAPFILEHEADER), sizeof(COLORREF_RGB),
-//											sizeof(UINT), sizeof(DWORD), sizeof(LONG), sizeof(WORD), sizeof(BYTE));
+	printDebug(0,"%d %d %d\n%d %d %d %d %d\n", sizeof(BITMAPINFOHEADER), sizeof(BITMAPFILEHEADER), sizeof(COLORREF_RGB),
+											sizeof(UINT), sizeof(DWORD), sizeof(LONG), sizeof(WORD), sizeof(BYTE));
 	
 	for(i = 0; i < bih.biHeight; i++)
 	{

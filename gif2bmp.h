@@ -7,15 +7,20 @@
 //* * *                  brezen 2018                  * * *//
 //*********************************************************//
 
+#ifndef GIF2BMP_H
+#define GIF2BMP_H
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <stdarg.h>
 
 #include <math.h>
 
 #define BI_RGB 0
 
+#define DEBUG 1
 #define SHOW_GIF 1
 
 #ifdef SHOW_GIF
@@ -28,6 +33,11 @@
     #define SHOW_END 1
 #endif
 
+static inline void printDebug(const int show, const char *fmt, ...);
+
+//Print binary format in printf
+//URL: https://stackoverflow.com/questions/111928/is-there-a-printf-converter-to-print-in-binary-format
+//Author: William Whyte on 8 Jul 2010
 #define BYTE_TO_BINARY_PATTERN "%c%c%c%c%c%c%c%c"
 #define BYTE_TO_BINARY(byte)  \
   (byte & 0x80 ? '1' : '0'), \
@@ -46,9 +56,8 @@ typedef uint16_t WORD;  // 2 B
 typedef uint8_t BYTE;   // 1 B
 
 //Hack to repair incorrect field sizes
-//https://stackoverflow.com/questions/27215610/creating-bmp-file-in-c
-//author: Weather Vane
-//date: Nov 30 2014
+//URL: https://stackoverflow.com/questions/27215610/creating-bmp-file-in-c
+//Author: Weather Vane on 30 Nov 2014
 #pragma pack(push, 1)
 
 typedef struct tagBITMAPFILEHEADER {
@@ -99,3 +108,5 @@ inputFile – vstupní soubor (GIF)
 outputFile – výstupní soubor (BMP)
 návratová hodnota – 0 převod proběhl v pořádku, -1 při převodu došlo k chybě, příp. nepodporuje daný formát GIF */
 int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile);
+
+#endif
