@@ -39,7 +39,7 @@ void toLittleEndian(const long long int size, void *value) {
 //Write debug messages conditioned by define constants
 //URL: https://stackoverflow.com/questions/21758136/write-debug-messages-in-c-to-a-file
 //Author: unwind on 13 Feb 2014
-static inline void printDebug(const int show, const char *fmt, ...) {
+inline void printDebug(const int show, const char *fmt, ...) {
 #ifdef DEBUG
 	if ( show ) {
 		va_list args;

@@ -33,7 +33,7 @@
     #define SHOW_END 1
 #endif
 
-static inline void printDebug(const int show, const char *fmt, ...);
+extern void printDebug(const int show, const char *fmt, ...);
 
 //Print binary format in printf
 //URL: https://stackoverflow.com/questions/111928/is-there-a-printf-converter-to-print-in-binary-format
