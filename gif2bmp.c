@@ -62,9 +62,7 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 	
 	DWORD head_pre;
 	WORD head_post;
-
-	BYTE term;
-
+	
 	BYTE hasGlobalTable, colorResolution;
 	WORD sizeOfGlobalTable;
 	
@@ -267,9 +265,9 @@ case 0x2C:
 //	Local Color Table section
 //********************************************************
 
-	order = 0;
-
 	if ( hasLocalTable ) {
+		order = 0;
+
 		for (i = 0; i < sizeOfLocalTable; ++i) {
 			//Read color table
 			fread(&color.cRed, sizeof(BYTE), 1, inputFile);
@@ -282,14 +280,6 @@ case 0x2C:
 #endif
 		}
 	}
-break;
-}
-
-default:
-	end_of_exts = 1;
-	
-		}
-	} while ( !end_of_exts );
 
 //********************************************************
 //	Image Data section
@@ -297,7 +287,7 @@ default:
 
 	BYTE LZWMinSize, bytesOfEncData;
 	
-	LZWMinSize = extension;
+	fread(&LZWMinSize, sizeof(BYTE), 1, inputFile);
 // 31F:   08           8           Start of image - LZW minimum code size
 
 #if SHOW_DATA_SIZE
@@ -349,17 +339,27 @@ default:
 	printf("\n");
 #endif
 
-	fread(&term, sizeof(BYTE), 1, inputFile);
-// 32D:   3B                       GIF file terminator
+break;
+}
+
+case 0x3B:
+	end_of_exts = 1;
+//********************************************************
+//	Trailer section
+//********************************************************
 
 #if SHOW_END	
-	printf("Term (3B): %X\n",term);
+	printf("Term (3B): %X\n",extension);
 #endif	
 
-	if ( term != 0x3B ) {
-		fprintf(stderr, "Not right ending of GIF file\n");
-		return -1;
-	}
+break;
+
+default:
+	fprintf(stderr, "Wrong ending of GIF file\n");
+	return -1;
+	
+		}
+	} while ( !end_of_exts );
 
 //Get file size using standard library
 //URL: https://stackoverflow.com/questions/238603/how-can-i-get-a-files-size-in-c
