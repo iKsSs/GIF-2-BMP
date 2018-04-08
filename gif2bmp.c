@@ -59,7 +59,7 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 
 //////////////////////////////
 // Variable declarations
-//////////////////////////////	
+//////////////////////////////
 	//Header
 	DWORD head_pre;
 	WORD head_post;
@@ -67,7 +67,7 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 
 	//Logical Screen Descriptor
 	BYTE GCT, back_color, pixel_ratio;
-	BYTE hasGlobalTable, colorResolution;
+	BYTE hasGlobalTable, colorResolution, sortOfGlobalTable;
 	WORD sizeOfGlobalTable;
 	
 	//Extensions
@@ -75,12 +75,14 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 	BYTE extension, ext_type;
 
 	//Graphics Control Extension section
-	BYTE gce, transparency, transparentColor, endOfBlock;
-	WORD delay;
+	BYTE size, transparency, transparentColor, endOfBlock, gce_loaded, Bnull;
+	WORD delay, Wnull;
 
 	//Color Table
-	COLORREF_RGB color;
+	COLORREF_RGB rgb, color;
+	COLORREF_RGB *globalTable, *localTable;
 	WORD order;
+	WORD ClearCode, EOICode;
 
 	//{Plain Text, Comment, Application Extension} Extension
 	BYTE length;
@@ -94,7 +96,14 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 
 	//Image Data
 	BYTE LZWMinSize, bytesOfEncData;
-	BYTE tmp;
+	int countOfData;
+	long int savedPos;
+	WORD *gifData;
+	BYTE code, lastCode;
+	int dataCounter;
+	BYTE dataShift;
+	BYTE masked;
+	BYTE over = 1;
 
 	//auxiliary
 	int i, j;
@@ -134,13 +143,14 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 
 	hasGlobalTable		= (0x80 & GCT) >> 7;
 	colorResolution		= (0x70 & GCT) >> 4;
+	sortOfGlobalTable	= (0x08 & GCT) >> 3;
 	sizeOfGlobalTable	= pow (2, (0x07 & GCT) + 1 );
 
 	printDebug(SHOW_HEADER,"CanvasW\tCanvasH\tGCT\t\tback_color\tpixel_ratio\n");
 	printDebug(SHOW_HEADER,"%d (%X)\t%d (%X)\t%X - "BYTE_TO_BINARY_PATTERN"\t%d (%X)\t\t%d (%X)\n",
 		canvasWidth,canvasWidth,canvasHeight,canvasHeight,GCT,BYTE_TO_BINARY(GCT),back_color,back_color,pixel_ratio,pixel_ratio);
 	if ( hasGlobalTable ) {
-		printDebug(SHOW_HEADER,"Size of global table: %d\n",sizeOfGlobalTable);
+		printDebug(SHOW_HEADER,"Size of global table: %d (%d)\n",sizeOfGlobalTable, sortOfGlobalTable);
 	} else {
 		printDebug(SHOW_HEADER,"No global table\n");
 	}
@@ -155,20 +165,41 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 	if ( hasGlobalTable ) {
 		order = 0;
 
+		globalTable = (COLORREF_RGB*) malloc(sizeof(COLORREF_RGB) * 2 * sizeOfGlobalTable);
+
+		if ( NULL == globalTable ) {
+			fprintf(stderr, "Error when allocation Global Table\n");
+			return -1;
+		}
+
 		for (i = 0; i < sizeOfGlobalTable; ++i) {
 			//Read color table
 			fread(&color.cRed, sizeof(BYTE), 1, inputFile);
 			fread(&color.cGreen, sizeof(BYTE), 1, inputFile);
 			fread(&color.cBlue, sizeof(BYTE), 1, inputFile);
 
+			globalTable[i].cRed = color.cRed;
+			globalTable[i].cGreen = color.cGreen;
+			globalTable[i].cBlue = color.cBlue;
+
 			//printDebug(SHOW_RGB_TABLE,"%2X\t%d (%X)\t%d (%X)\t%d (%X)\n",order++,color.cRed,color.cRed,color.cGreen,color.cGreen,color.cBlue,color.cBlue);
 			printDebug(SHOW_RGB_TABLE,"%2X\t%X\t%X\t%X\n",order++,color.cRed,color.cGreen,color.cBlue);
 		}
+
+		rgb.cRed = rgb.cGreen = rgb.cBlue = 0x00;
+
+		ClearCode	= sizeOfGlobalTable;
+		EOICode		= sizeOfGlobalTable + 1;
+
+		globalTable[sizeOfGlobalTable]		= rgb;	//Clear Code
+		globalTable[sizeOfGlobalTable+1]	= rgb;	//End Of Information Code
 	}
 
 //********************************************************
 //	Extensions section
 //********************************************************
+
+	gce_loaded = 0;
 
 	do {
 		fread(&extension, sizeof(BYTE), 1, inputFile);
@@ -183,17 +214,28 @@ case 0x21:
 //	Graphics Control Extension section
 //********************************************************
 		
-		fread(&gce, sizeof(BYTE), 1, inputFile);
-		fread(&transparency, sizeof(BYTE), 1, inputFile);
-		fread(&delay, sizeof(WORD), 1, inputFile);
-		fread(&transparentColor, sizeof(BYTE), 1, inputFile);
-		fread(&endOfBlock, sizeof(BYTE), 1, inputFile);
+		fread(&size, sizeof(BYTE), 1, inputFile);
 
 		printDebug(SHOW_EXT,"------------------\n");
 		printDebug(SHOW_EXT,"GCE (21F9): %X%X\n", extension, ext_type);
-		printDebug(SHOW_EXT,"GCE_dat\ttransp.\tdelay\ttransp_col\tEOB\n");
-		printDebug(SHOW_EXT,"%d (%X)\t%d (%X)\t%d (%X)\t%d (%X)\t%d (%X)\n",
-				gce,gce,transparency,transparency,delay,delay,transparentColor,transparentColor,endOfBlock,endOfBlock);	
+
+		if ( gce_loaded ) {
+			fread(&Bnull, sizeof(BYTE), 1, inputFile);
+			fread(&Wnull, sizeof(WORD), 1, inputFile);
+			fread(&Bnull, sizeof(BYTE), 1, inputFile);
+			fread(&Bnull, sizeof(BYTE), 1, inputFile);
+		} else {
+			fread(&transparency, sizeof(BYTE), 1, inputFile);
+			fread(&delay, sizeof(WORD), 1, inputFile);
+			fread(&transparentColor, sizeof(BYTE), 1, inputFile);
+			fread(&endOfBlock, sizeof(BYTE), 1, inputFile);
+
+			printDebug(SHOW_EXT,"size\ttransp.\tdelay\ttransp_col\tEOB\n");
+			printDebug(SHOW_EXT,"%d (%X)\t%d (%X)\t%d (%X)\t%d (%X)\t%d (%X)\n",
+					size,size,transparency,transparency,delay,delay,transparentColor,transparentColor,endOfBlock,endOfBlock);
+
+			gce_loaded = 1;
+		}
 
 	} else if ( 0x01 == ext_type || 0xFE == ext_type || 0xFF == ext_type ) {
 //********************************************************
@@ -247,12 +289,23 @@ case 0x2C:
 
 	if ( hasLocalTable ) {
 		order = 0;
+		
+		localTable = (COLORREF_RGB*) malloc(sizeof(COLORREF_RGB) * sizeOfLocalTable);
+
+		if ( NULL == localTable ) {
+			fprintf(stderr, "Error when allocation Local Table\n");
+			return -1;
+		}
 
 		for (i = 0; i < sizeOfLocalTable; ++i) {
 			//Read color table
 			fread(&color.cRed, sizeof(BYTE), 1, inputFile);
 			fread(&color.cGreen, sizeof(BYTE), 1, inputFile);
 			fread(&color.cBlue, sizeof(BYTE), 1, inputFile);
+
+			localTable[i].cRed = color.cRed;
+			localTable[i].cGreen = color.cGreen;
+			localTable[i].cBlue = color.cBlue;
 
 			//printDebug(SHOW_RGB_TABLE,"%2X\t%d (%X)\t%d (%X)\t%d (%X)\n",order++,color.cRed,color.cRed,color.cGreen,color.cGreen,color.cBlue,color.cBlue);
 			printDebug(SHOW_RGB_TABLE,"%2X\t%X\t%X\t%X\n",order++,color.cRed,color.cGreen,color.cBlue);
@@ -268,6 +321,28 @@ case 0x2C:
 	printDebug(SHOW_DATA_SIZE,"------------------\n");
 	printDebug(SHOW_DATA_SIZE,"Start of Image - LZW min code size:\n");
 	printDebug(SHOW_DATA_SIZE,"%d (%X)\n",LZWMinSize,LZWMinSize);
+
+	countOfData = 0;
+
+	savedPos = ftell(inputFile);	//save file pointer position
+
+	do {
+		fread(&bytesOfEncData, sizeof(BYTE), 1, inputFile);
+
+		countOfData += bytesOfEncData;
+
+		fseek( inputFile, ftell(inputFile)+bytesOfEncData, SEEK_SET );	//shift file pointer position
+	} while ( 0x00 != bytesOfEncData );
+
+	fseek( inputFile, savedPos, SEEK_SET );		//recover file pointer position
+
+	countOfData = (countOfData << 3) / 9;		// 9 bit encoded in 8 bit
+
+	gifData = (WORD*) malloc(sizeof(WORD) * countOfData);
+
+	printDebug(SHOW_DATA_SIZE,"Total data: %d\n",countOfData);
+
+	dataCounter = 0;
 
 	int first = 1;
 
@@ -286,8 +361,31 @@ case 0x2C:
 		}
 
 		for (i = 0; i < bytesOfEncData; i++) {
-			fread(&tmp, sizeof(BYTE), 1, inputFile);
-			printDebug(SHOW_DATA,"%2X ",tmp);
+			lastCode = code;
+
+			fread(&code, sizeof(BYTE), 1, inputFile);
+			
+			if ( over ) {
+				over = 0;
+				dataShift = 0;
+			} else {
+				gifData[dataCounter++] = lastCode >> dataShift++;
+
+				if ( dataShift == 8 ) {
+					over = 1;
+				}
+
+				masked = ((0xFF >> (8-dataShift)) & code) << (8 - dataShift);
+					
+				printDebug(SHOW_DATA_DETAIL,"%2X(%2X): %2X %2X %d - %2X %3X = %3X\n", code, lastCode,
+					(0xFF >> (8-dataShift)), ((0xFF >> (8-dataShift)) & code),
+					(8 - dataShift), gifData[(dataCounter-1)], masked << 1,
+					gifData[(dataCounter-1)] + (masked << 1));
+
+				gifData[(dataCounter-1)] += (masked << 1);
+			}
+
+			printDebug(SHOW_DATA,"%2X ",code);
 		}
 
 		if ( bytesOfEncData ) {
@@ -295,7 +393,13 @@ case 0x2C:
 		}
 	} while ( 0x00 != bytesOfEncData );
 	
-	printDebug(SHOW_GIF && !SHOW_DATA,"\n");
+	printDebug(!SHOW_DATA,"\n");
+
+	printDebug(SHOW_DATA_DETAIL,"Data detail: ");
+	for (i = 0; i < countOfData; i++) {
+		printDebug(SHOW_DATA_DETAIL,"%2X ",gifData[i]);
+	}
+	printDebug(SHOW_DATA_DETAIL,"\n");
 
 break;
 
@@ -322,6 +426,32 @@ default:
 	fseek(inputFile, 0, SEEK_END); // seek to end of file
 	gif2bmp->gifSize = ftell(inputFile); // get current file pointer
 
+//********************************************************
+//	Create Table section
+//********************************************************
+	dataCounter = 0;
+
+	int insertPos = EOICode + 1;
+
+	while ( EOICode != gifData[dataCounter] ) {
+		if ( ClearCode == gifData[dataCounter] ) {
+			printDebug(SHOW_TABLE,"Clear Code\n");
+			//REINIT TABLE
+		} else {
+			printDebug(SHOW_TABLE,".");
+			rgb.cBlue++;
+			globalTable[insertPos++] = rgb;
+		}
+
+		dataCounter++;
+	}
+	
+	printDebug(SHOW_TABLE,"\n");
+
+	for (i = 0; i < 2*sizeOfGlobalTable; ++i) {
+		printDebug(SHOW_TABLE,"%2X: %2X %2X %2X\n", i,
+			globalTable[i].cRed, globalTable[i].cGreen, globalTable[i].cBlue);
+	}
 
 //////////////////////////////
 // Create BMP file
@@ -350,7 +480,7 @@ default:
 
 	bih.biSizeImage = bih.biWidth * bih.biHeight * 3 + bih.biWidth * padding_count;
 	
-	COLORREF_RGB rgb;
+	COLORREF_RGB *currRGB;
 	rgb.cRed = 255;
 	rgb.cGreen = 0;
 	rgb.cBlue = 0;
@@ -376,12 +506,19 @@ default:
 	printDebug(0,"%d %d %d\n%d %d %d %d %d\n", sizeof(BITMAPINFOHEADER), sizeof(BITMAPFILEHEADER), sizeof(COLORREF_RGB),
 											sizeof(UINT), sizeof(DWORD), sizeof(LONG), sizeof(WORD), sizeof(BYTE));
 	
+	dataCounter = 0;
+
 	for(i = 0; i < bih.biHeight; i++)
 	{
 		//Write a pixel to outputFile
 		for(j = 0; j < bih.biWidth; j++)
 		{
-			fwrite(&rgb, sizeof(COLORREF_RGB), 1, outputFile);
+			// currRGB = &(globalTable[(gifData[dataCounter++])]);
+
+			// printDebug(SHOW_OUT_DATA,"%2X %2X %2X\n",
+			// 	currRGB->cRed, currRGB->cGreen, currRGB->cBlue);
+
+			fwrite(&currRGB, sizeof(COLORREF_RGB), 1, outputFile);
 		}
 		
 		//Padding for 4 byte alignment (could be a value other than zero)
@@ -393,6 +530,20 @@ default:
 
 	//fseek(outputFile, 0, SEEK_END); // seek to end of file
 	gif2bmp->bmpSize = ftell(outputFile); // get current file pointer
+
+//********************************************************
+//	Deallocation section
+//********************************************************
+
+	if ( hasGlobalTable ) {
+		free(globalTable);
+	}
+
+	if ( hasLocalTable ) {
+		free(localTable);
+	}
+
+	free(gifData);
 
 	return 0;
 }

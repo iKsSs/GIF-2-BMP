@@ -21,17 +21,18 @@
 #define BI_RGB 0
 
 #define DEBUG 1
-#define SHOW_GIF 1
 
-#ifdef SHOW_GIF
-    #define SHOW_HEADER 1
-    #define SHOW_RGB_TABLE 0
-    #define SHOW_EXT 1
-    #define SHOW_IMG_DESC 1
-    #define SHOW_DATA_SIZE 1
-    #define SHOW_DATA 1
-    #define SHOW_END 1
-#endif
+#define SHOW_HEADER 1
+#define SHOW_RGB_TABLE 0
+#define SHOW_EXT 1
+#define SHOW_IMG_DESC 1
+#define SHOW_DATA_SIZE 1
+#define SHOW_DATA 0
+#define SHOW_DATA_DETAIL 1
+#define SHOW_END 1
+#define SHOW_TABLE 1
+
+#define SHOW_OUT_DATA 1
 
 extern void printDebug(const int show, const char *fmt, ...);
 
