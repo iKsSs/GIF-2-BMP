@@ -156,6 +156,12 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 	}
 	printDebug(SHOW_HEADER,"Color resolution: %d bits/pixel\n", colorResolution+1);
 
+	//not 8 bit per color
+	if ( 7 != colorResolution ) {
+		fprintf(stderr, "Unsupported color resolution\n");
+		return -1;
+	}
+
 //********************************************************
 //	Global Color Table section
 //********************************************************
@@ -430,14 +436,27 @@ default:
 //	Create Table section
 //********************************************************
 	dataCounter = 0;
+	int outCounter;
+	outCounter = 0;
 
 	int insertPos = EOICode + 1;
+
+	COLORREF_RGB *colorBMP;
+
+	colorBMP = (COLORREF_RGB *) malloc(sizeof(COLORREF_RGB) * imageWidth * imageHeight);
 
 	while ( EOICode != gifData[dataCounter] ) {
 		if ( ClearCode == gifData[dataCounter] ) {
 			printDebug(SHOW_TABLE,"Clear Code\n");
 			//REINIT TABLE
 		} else {
+			color = globalTable[(gifData[dataCounter])];
+			//if ( NULL == color ) {
+			if ( 0x96 == color.cRed ) {
+			} else {
+				colorBMP[outCounter++] = color;
+			}
+
 			printDebug(SHOW_TABLE,".");
 			rgb.cBlue++;
 			globalTable[insertPos++] = rgb;
@@ -448,9 +467,11 @@ default:
 	
 	printDebug(SHOW_TABLE,"\n");
 
-	for (i = 0; i < 2*sizeOfGlobalTable; ++i) {
-		printDebug(SHOW_TABLE,"%2X: %2X %2X %2X\n", i,
-			globalTable[i].cRed, globalTable[i].cGreen, globalTable[i].cBlue);
+	for (i = 0; i < sizeOfGlobalTable; ++i) {
+		j = i + sizeOfGlobalTable;
+		printDebug(SHOW_TABLE,"%2X: %2X %2X %2X\t\t%2X: %2X %2X %2X\n",
+			i, globalTable[i].cRed, globalTable[i].cGreen, globalTable[i].cBlue,
+			j, globalTable[j].cRed, globalTable[j].cGreen, globalTable[j].cBlue);
 	}
 
 //////////////////////////////
@@ -505,18 +526,20 @@ default:
 
 	printDebug(0,"%d %d %d\n%d %d %d %d %d\n", sizeof(BITMAPINFOHEADER), sizeof(BITMAPFILEHEADER), sizeof(COLORREF_RGB),
 											sizeof(UINT), sizeof(DWORD), sizeof(LONG), sizeof(WORD), sizeof(BYTE));
+
+	printDebug(SHOW_OUT_DATA, "Image: %d x %d -> %d\n", imageWidth, imageHeight, imageWidth * imageHeight);
 	
-	dataCounter = 0;
+	outCounter = 0;
 
 	for(i = 0; i < bih.biHeight; i++)
 	{
 		//Write a pixel to outputFile
 		for(j = 0; j < bih.biWidth; j++)
 		{
-			// currRGB = &(globalTable[(gifData[dataCounter++])]);
+			currRGB = &(colorBMP[outCounter++]);
 
-			// printDebug(SHOW_OUT_DATA,"%2X %2X %2X\n",
-			// 	currRGB->cRed, currRGB->cGreen, currRGB->cBlue);
+			printDebug(SHOW_OUT_DATA,"%2X %2X %2X\n",
+				currRGB->cRed, currRGB->cGreen, currRGB->cBlue);
 
 			fwrite(&currRGB, sizeof(COLORREF_RGB), 1, outputFile);
 		}
