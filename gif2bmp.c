@@ -9,6 +9,11 @@
 
 #include "gif2bmp.h"
 
+COLORREF_RGB white = {0xFF,0xFF,0xFF};
+COLORREF_RGB black = {0x00,0x00,0x00};
+
+COLORREF_RGB junk = {0xEE,0x33,0x99};
+
 //URL: http://blog.acipo.com/handling-endianness-in-c/
 //Author: Andrew Ippoliti on 23 Nov 2013
 
@@ -79,8 +84,9 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 	WORD delay, Wnull;
 
 	//Color Table
-	COLORREF_RGB rgb, color;
-	COLORREF_RGB *globalTable, *localTable;
+	COLORREF_RGB color;
+	COLOR_LIST **globalTable;
+	COLORREF_RGB *localTable;
 	WORD order;
 	WORD ClearCode, EOICode;
 
@@ -104,6 +110,12 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 	BYTE dataShift;
 	BYTE masked;
 	BYTE over = 1;
+
+	//Create Table
+	int outCounter, colorSize, insertPos;
+	COLORREF_RGB *colorBMP;
+	COLORREF_RGB currColor, lastColor;
+	COLOR_LIST *item, *newColor;
 
 	//auxiliary
 	int i, j;
@@ -171,11 +183,20 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 	if ( hasGlobalTable ) {
 		order = 0;
 
-		globalTable = (COLORREF_RGB*) malloc(sizeof(COLORREF_RGB) * 2 * sizeOfGlobalTable);
+		globalTable = (COLOR_LIST**) malloc(sizeof(COLOR_LIST*) * 2 * sizeOfGlobalTable);
 
 		if ( NULL == globalTable ) {
 			fprintf(stderr, "Error when allocation Global Table\n");
 			return -1;
+		}
+
+		for (i = 0; i < 2 * sizeOfGlobalTable; ++i) {
+			newColor = (COLOR_LIST*) malloc(sizeof(COLOR_LIST));
+			newColor->color = white;
+			newColor->valid = 0;
+			newColor->next = NULL;
+
+			globalTable[i] = newColor;
 		}
 
 		for (i = 0; i < sizeOfGlobalTable; ++i) {
@@ -184,21 +205,22 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 			fread(&color.cGreen, sizeof(BYTE), 1, inputFile);
 			fread(&color.cBlue, sizeof(BYTE), 1, inputFile);
 
-			globalTable[i].cRed = color.cRed;
-			globalTable[i].cGreen = color.cGreen;
-			globalTable[i].cBlue = color.cBlue;
+			globalTable[i]->color = color;
+			globalTable[i]->valid = 1;
 
-			//printDebug(SHOW_RGB_TABLE,"%2X\t%d (%X)\t%d (%X)\t%d (%X)\n",order++,color.cRed,color.cRed,color.cGreen,color.cGreen,color.cBlue,color.cBlue);
-			printDebug(SHOW_RGB_TABLE,"%2X\t%X\t%X\t%X\n",order++,color.cRed,color.cGreen,color.cBlue);
+			printDebug(SHOW_RGB_TABLE,"%2X\t%X\t%X\t%X\n",
+				order++,color.cRed,color.cGreen,color.cBlue);
 		}
 
-		rgb.cRed = rgb.cGreen = rgb.cBlue = 0x00;
+		insertPos = sizeOfGlobalTable;
 
-		ClearCode	= sizeOfGlobalTable;
-		EOICode		= sizeOfGlobalTable + 1;
+		ClearCode	= insertPos;
+		globalTable[insertPos]->valid = 2;
+		globalTable[insertPos++]->color	= white;	//Clear Code
 
-		globalTable[sizeOfGlobalTable]		= rgb;	//Clear Code
-		globalTable[sizeOfGlobalTable+1]	= rgb;	//End Of Information Code
+		EOICode		= insertPos;
+		globalTable[insertPos]->valid = 2;
+		globalTable[insertPos++]->color	= white;	//End Of Information Code
 	}
 
 //********************************************************
@@ -304,14 +326,16 @@ case 0x2C:
 		}
 
 		for (i = 0; i < sizeOfLocalTable; ++i) {
+			localTable[i] = white;
+		}
+
+		for (i = 0; i < sizeOfLocalTable; ++i) {
 			//Read color table
 			fread(&color.cRed, sizeof(BYTE), 1, inputFile);
 			fread(&color.cGreen, sizeof(BYTE), 1, inputFile);
 			fread(&color.cBlue, sizeof(BYTE), 1, inputFile);
 
-			localTable[i].cRed = color.cRed;
-			localTable[i].cGreen = color.cGreen;
-			localTable[i].cBlue = color.cBlue;
+			localTable[i] = color;
 
 			//printDebug(SHOW_RGB_TABLE,"%2X\t%d (%X)\t%d (%X)\t%d (%X)\n",order++,color.cRed,color.cRed,color.cGreen,color.cGreen,color.cBlue,color.cBlue);
 			printDebug(SHOW_RGB_TABLE,"%2X\t%X\t%X\t%X\n",order++,color.cRed,color.cGreen,color.cBlue);
@@ -345,6 +369,15 @@ case 0x2C:
 	countOfData = (countOfData << 3) / 9;		// 9 bit encoded in 8 bit
 
 	gifData = (WORD*) malloc(sizeof(WORD) * countOfData);
+
+	if ( NULL == gifData ) {
+		fprintf(stderr, "Error when allocation GIF Data Table\n");
+		return -1;
+	}
+
+	for (i = 0; i < countOfData; ++i) {
+		gifData[i] = 0;
+	}
 
 	printDebug(SHOW_DATA_SIZE,"Total data: %d\n",countOfData);
 
@@ -436,42 +469,105 @@ default:
 //	Create Table section
 //********************************************************
 	dataCounter = 0;
-	int outCounter;
 	outCounter = 0;
 
-	int insertPos = EOICode + 1;
+	insertPos = EOICode + 1;
 
-	COLORREF_RGB *colorBMP;
+	colorSize = imageWidth * imageHeight;
 
-	colorBMP = (COLORREF_RGB *) malloc(sizeof(COLORREF_RGB) * imageWidth * imageHeight);
+	colorBMP = (COLORREF_RGB *) malloc(sizeof(COLORREF_RGB) * colorSize);
 
-	while ( EOICode != gifData[dataCounter] ) {
+	if ( NULL == colorBMP ) {
+		fprintf(stderr, "Error when allocation Color BMP Table\n");
+		return -1;
+	}
+
+	for (i = 0; i < colorSize; ++i) {
+		colorBMP[i] = junk;
+	}
+
+	for (dataCounter = 0; EOICode != gifData[dataCounter]; ++dataCounter) {
+
 		if ( ClearCode == gifData[dataCounter] ) {
 			printDebug(SHOW_TABLE,"Clear Code\n");
 			//REINIT TABLE
 		} else {
-			color = globalTable[(gifData[dataCounter])];
-			//if ( NULL == color ) {
-			if ( 0x96 == color.cRed ) {
-			} else {
-				colorBMP[outCounter++] = color;
+			lastColor = currColor;
+
+			item = globalTable[(gifData[dataCounter])];
+
+			currColor = item->color;
+
+			if ( dataCounter ) {	//first color value is only printed out
+
+				if ( item->valid ) {	//color already in table
+				 	do {
+						colorBMP[outCounter++] = item->color;
+				 		if ( NULL == item->next ) { break; }
+				 		item = item->next;
+				 	} while ( NULL != item );
+				}
+
+				globalTable[insertPos]->color = lastColor;
+				globalTable[insertPos]->valid = 3;
+				
+				while ( NULL != item->next ) {
+				 	item = item->next;
+				}
+
+				newColor = (COLOR_LIST*) malloc(sizeof(COLOR_LIST));
+				if ( item->valid ) {
+					newColor->color = currColor;
+				} else {
+					newColor->color = lastColor;
+				}
+				newColor->valid = 4;
+				newColor->next = NULL;
+
+				globalTable[insertPos]->next = newColor;
+
+				item = globalTable[insertPos];
+
+				if ( !item->valid ) {	//new color to table
+				 	do {
+						colorBMP[outCounter++] = junk;
+						if ( NULL == item->next ) { break; }
+				 		item = item->next;
+				 	} while ( NULL != item );
+				}
+
+				insertPos++;
 			}
 
 			printDebug(SHOW_TABLE,".");
-			rgb.cBlue++;
-			globalTable[insertPos++] = rgb;
 		}
-
-		dataCounter++;
 	}
 	
 	printDebug(SHOW_TABLE,"\n");
 
-	for (i = 0; i < sizeOfGlobalTable; ++i) {
+	//for (i = 0; i < sizeOfGlobalTable; ++i) {
+	for (i = 0; i < 20; ++i) {
 		j = i + sizeOfGlobalTable;
-		printDebug(SHOW_TABLE,"%2X: %2X %2X %2X\t\t%2X: %2X %2X %2X\n",
-			i, globalTable[i].cRed, globalTable[i].cGreen, globalTable[i].cBlue,
-			j, globalTable[j].cRed, globalTable[j].cGreen, globalTable[j].cBlue);
+		item = globalTable[i];
+		printDebug(SHOW_TABLE,"%2X: %2X %2X %2X %5s %d\t",
+			i, item->color.cRed, item->color.cGreen, 
+			item->color.cBlue,
+			(NULL == item->next) ? "null" : "X",item->valid);
+		item = globalTable[j];
+		printDebug(SHOW_TABLE,"%2X: %2X %2X %2X %5s %d",
+			j, item->color.cRed, item->color.cGreen,
+			item->color.cBlue, (NULL == item->next) ? "null" : "X",
+			item->valid);
+		
+		item = globalTable[j]->next;
+		while ( NULL != item ) {
+			printDebug(SHOW_TABLE,"\t%2X %2X %2X %5s %d",
+				item->color.cRed, item->color.cGreen, item->color.cBlue,
+				(NULL == item->next) ? "null" : "X",item->valid);
+			item = item->next;
+		}
+
+		printDebug(SHOW_TABLE,"\n");
 	}
 
 //////////////////////////////
@@ -502,9 +598,6 @@ default:
 	bih.biSizeImage = bih.biWidth * bih.biHeight * 3 + bih.biWidth * padding_count;
 	
 	COLORREF_RGB *currRGB;
-	rgb.cRed = 255;
-	rgb.cGreen = 0;
-	rgb.cBlue = 0;
 
 	BITMAPFILEHEADER bfh;
 
@@ -538,12 +631,17 @@ default:
 		{
 			currRGB = &(colorBMP[outCounter++]);
 
-			printDebug(SHOW_OUT_DATA,"%2X %2X %2X\n",
+			printDebug(SHOW_OUT_DATA,"\x1b[38;2;%d;%d;%dm""X""\x1b[38;2;255;255;255m",
 				currRGB->cRed, currRGB->cGreen, currRGB->cBlue);
+
+		//	printDebug(SHOW_OUT_DATA,"%2X;%2X;%2X ",
+		//		currRGB->cRed, currRGB->cGreen, currRGB->cBlue);
 
 			fwrite(&currRGB, sizeof(COLORREF_RGB), 1, outputFile);
 		}
 		
+		printDebug(SHOW_OUT_DATA,"\n");
+
 		//Padding for 4 byte alignment (could be a value other than zero)
 		for(j = 0; j < padding_count; j++)
 		{
@@ -567,6 +665,7 @@ default:
 	}
 
 	free(gifData);
+	free(colorBMP);
 
 	return 0;
 }

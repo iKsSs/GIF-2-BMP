@@ -94,6 +94,13 @@ typedef struct COLORREF_RGB
     BYTE cRed;
 } COLORREF_RGB;
 
+typedef struct COLOR_LIST
+{
+    COLORREF_RGB color;
+    struct COLOR_LIST *next;
+    BYTE valid;
+} COLOR_LIST;
+
 typedef struct{
 	int64_t bmpSize;
 	int64_t gifSize;
