@@ -74,6 +74,7 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 	BYTE GCT, back_color, pixel_ratio;
 	BYTE hasGlobalTable, colorResolution, sortOfGlobalTable;
 	WORD sizeOfGlobalTable;
+	int maxOfGlobalTable;
 	
 	//Extensions
 	BYTE end_of_exts = 0;
@@ -115,7 +116,9 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 	int outCounter, colorSize, insertPos;
 	COLORREF_RGB *colorBMP;
 	COLORREF_RGB currColor, lastColor;
-	COLOR_LIST *item, *newColor;
+	COLOR_LIST *item, *currItem, *lastItem, *nextItem, *newColor;
+	int valid;
+	int currPos;
 
 	//auxiliary
 	int i, j;
@@ -137,7 +140,7 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 	printDebug(SHOW_HEADER,"Head (47494638 3961): %X %X\n",head_pre,head_post);
 
 	if ( head_pre != 0x47494638 //dec: GIF8
-			|| head_post != 0x3961 ) { //dec: 9a
+			|| !( head_post == 0x3961 || head_post == 0x3761 ) ) { //dec: 9a, 7a
 		fprintf(stderr, "Not right head of GIF file\n");
 		return -1;
 	}
@@ -183,6 +186,8 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 	if ( hasGlobalTable ) {
 		order = 0;
 
+		maxOfGlobalTable = 2 * sizeOfGlobalTable;
+
 		globalTable = (COLOR_LIST**) malloc(sizeof(COLOR_LIST*) * 2 * sizeOfGlobalTable);
 
 		if ( NULL == globalTable ) {
@@ -190,7 +195,7 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 			return -1;
 		}
 
-		for (i = 0; i < 2 * sizeOfGlobalTable; ++i) {
+		for (i = 0; i < maxOfGlobalTable; ++i) {
 			newColor = (COLOR_LIST*) malloc(sizeof(COLOR_LIST));
 			newColor->color = white;
 			newColor->valid = 0;
@@ -315,7 +320,7 @@ case 0x2C:
 //	Local Color Table section
 //********************************************************
 
-	if ( hasLocalTable ) {
+/*	if ( hasLocalTable ) {
 		order = 0;
 		
 		localTable = (COLORREF_RGB*) malloc(sizeof(COLORREF_RGB) * sizeOfLocalTable);
@@ -340,6 +345,51 @@ case 0x2C:
 			//printDebug(SHOW_RGB_TABLE,"%2X\t%d (%X)\t%d (%X)\t%d (%X)\n",order++,color.cRed,color.cRed,color.cGreen,color.cGreen,color.cBlue,color.cBlue);
 			printDebug(SHOW_RGB_TABLE,"%2X\t%X\t%X\t%X\n",order++,color.cRed,color.cGreen,color.cBlue);
 		}
+	}
+	*/
+	if ( hasLocalTable ) {
+		order = 0;
+
+		maxOfGlobalTable = 2 * sizeOfLocalTable;
+
+		globalTable = (COLOR_LIST**) malloc(sizeof(COLOR_LIST*) * 2 * sizeOfLocalTable);
+
+		if ( NULL == globalTable ) {
+			fprintf(stderr, "Error when allocation Local Table\n");
+			return -1;
+		}
+
+		for (i = 0; i < 2 * sizeOfLocalTable; ++i) {
+			newColor = (COLOR_LIST*) malloc(sizeof(COLOR_LIST));
+			newColor->color = white;
+			newColor->valid = 0;
+			newColor->next = NULL;
+
+			globalTable[i] = newColor;
+		}
+
+		for (i = 0; i < sizeOfLocalTable; ++i) {
+			//Read color table
+			fread(&color.cRed, sizeof(BYTE), 1, inputFile);
+			fread(&color.cGreen, sizeof(BYTE), 1, inputFile);
+			fread(&color.cBlue, sizeof(BYTE), 1, inputFile);
+
+			globalTable[i]->color = color;
+			globalTable[i]->valid = 1;
+
+			printDebug(SHOW_RGB_TABLE,"%2X\t%X\t%X\t%X\n",
+				order++,color.cRed,color.cGreen,color.cBlue);
+		}
+
+		insertPos = sizeOfLocalTable;
+
+		ClearCode	= insertPos;
+		globalTable[insertPos]->valid = 2;
+		globalTable[insertPos++]->color	= white;	//Clear Code
+
+		EOICode		= insertPos;
+		globalTable[insertPos]->valid = 2;
+		globalTable[insertPos++]->color	= white;	//End Of Information Code
 	}
 
 //********************************************************
@@ -366,7 +416,7 @@ case 0x2C:
 
 	fseek( inputFile, savedPos, SEEK_SET );		//recover file pointer position
 
-	countOfData = (countOfData << 3) / 9;		// 9 bit encoded in 8 bit
+	countOfData = (countOfData << 3) / (LZWMinSize + 1);		// LZWmin bit encoded in 8 bit
 
 	gifData = (WORD*) malloc(sizeof(WORD) * countOfData);
 
@@ -382,6 +432,7 @@ case 0x2C:
 	printDebug(SHOW_DATA_SIZE,"Total data: %d\n",countOfData);
 
 	dataCounter = 0;
+	order = 0;
 
 	int first = 1;
 
@@ -400,38 +451,66 @@ case 0x2C:
 		}
 
 		for (i = 0; i < bytesOfEncData; i++) {
-			lastCode = code;
+			if ( 8 == LZWMinSize ) {
+				lastCode = code;
 
-			fread(&code, sizeof(BYTE), 1, inputFile);
-			
-			if ( over ) {
-				over = 0;
-				dataShift = 0;
-			} else {
-				gifData[dataCounter++] = lastCode >> dataShift++;
+				fread(&code, sizeof(BYTE), 1, inputFile);
+				
+				if ( over ) {
+					over = 0;
+					dataShift = 0;
+				} else {
+					gifData[dataCounter++] = lastCode >> dataShift++;
 
-				if ( dataShift == 8 ) {
-					over = 1;
+					if ( dataShift == 8 ) {
+						over = 1;
+					}
+
+					masked = ((0xFF >> (8-dataShift)) & code) << (8 - dataShift);
+						
+					printDebug(SHOW_DATA_DETAIL,"%2X(%2X): %2X %2X %d - %2X %3X = %3X\n", code, lastCode,
+						(0xFF >> (8-dataShift)), ((0xFF >> (8-dataShift)) & code),
+						(8 - dataShift), gifData[(dataCounter-1)], masked << 1,
+						gifData[(dataCounter-1)] + (masked << 1));
+
+					gifData[(dataCounter-1)] += (masked << 1);
 				}
 
-				masked = ((0xFF >> (8-dataShift)) & code) << (8 - dataShift);
-					
-				printDebug(SHOW_DATA_DETAIL,"%2X(%2X): %2X %2X %d - %2X %3X = %3X\n", code, lastCode,
-					(0xFF >> (8-dataShift)), ((0xFF >> (8-dataShift)) & code),
-					(8 - dataShift), gifData[(dataCounter-1)], masked << 1,
-					gifData[(dataCounter-1)] + (masked << 1));
+				printDebug(SHOW_DATA,"%2X ",code);
+			} else if ( 2 == LZWMinSize ) {
+				fread(&code, sizeof(BYTE), 1, inputFile);
 
-				gifData[(dataCounter-1)] += (masked << 1);
+				switch (order) {
+					case 0:
+						gifData[dataCounter++] = (0xE0 & code) >> 5;
+						gifData[dataCounter++] = (0x1C & code) >> 2;
+						lastCode = 0x03 & code;
+						order++;
+						break;
+					case 1:
+						gifData[dataCounter++] = lastCode + ((0x80 & code) >> 5);
+						gifData[dataCounter++] = (0x70 & code) >> 4;
+						gifData[dataCounter++] = (0x0E & code) >> 1;
+						lastCode = 0x01 & code;
+						order++;
+						break;
+					case 2:
+						gifData[dataCounter++] = lastCode + ((0xC0 & code) >> 5);
+						gifData[dataCounter++] = (0x38 & code) >> 3;
+						gifData[dataCounter++] = 0x07 & code;
+						order = 0;
+						break;
+				}
+			
+				printDebug(SHOW_DATA,"%2X ",code);			
 			}
-
-			printDebug(SHOW_DATA,"%2X ",code);
 		}
 
 		if ( bytesOfEncData ) {
 			printDebug(SHOW_DATA,"\n");
 		}
 	} while ( 0x00 != bytesOfEncData );
-	
+
 	printDebug(!SHOW_DATA,"\n");
 
 	printDebug(SHOW_DATA_DETAIL,"Data detail: ");
@@ -481,26 +560,50 @@ default:
 		fprintf(stderr, "Error when allocation Color BMP Table\n");
 		return -1;
 	}
+	
+	printDebug(SHOW_TABLE,"%d<<\n",(gifData[dataCounter]));
+
+	currPos = gifData[dataCounter];
+	
+	printDebug(SHOW_TABLE,"%d > %d = %d\n", maxOfGlobalTable, currPos, maxOfGlobalTable > currPos);
+
+	if ( maxOfGlobalTable > currPos && globalTable[currPos]->valid ) {
+		lastColor = globalTable[currPos]->color;
+	} else {
+		lastColor = junk;
+	}
 
 	for (i = 0; i < colorSize; ++i) {
-		colorBMP[i] = junk;
+		colorBMP[i] = lastColor;
 	}
 
 	for (dataCounter = 0; EOICode != gifData[dataCounter]; ++dataCounter) {
 
-		if ( ClearCode == gifData[dataCounter] ) {
+		currPos = gifData[dataCounter];
+
+		if ( maxOfGlobalTable <= currPos ) {
+			fprintf(stderr, "Index out of range!\n");
+			return -1;
+		}
+
+		if ( ClearCode == currPos ) {
 			printDebug(SHOW_TABLE,"Clear Code\n");
 			//REINIT TABLE
+			printDebug(SHOW_TABLE,"\x1b[38;2;200;50;200m""!!!!!""\x1b[0m\n");
 		} else {
 			lastColor = currColor;
+			lastItem = currItem;
 
-			item = globalTable[(gifData[dataCounter])];
+			currItem = globalTable[currPos];
 
-			currColor = item->color;
+			currColor = currItem->color;
 
-			if ( dataCounter ) {	//first color value is only printed out
+			if ( 1 < dataCounter ) {	//first color value is only printed out
 
-				if ( item->valid ) {	//color already in table
+				valid = currItem->valid;
+
+				if ( valid ) {	//color already in table
+					item = currItem;
 				 	do {
 						colorBMP[outCounter++] = item->color;
 				 		if ( NULL == item->next ) { break; }
@@ -508,15 +611,30 @@ default:
 				 	} while ( NULL != item );
 				}
 
-				globalTable[insertPos]->color = lastColor;
-				globalTable[insertPos]->valid = 3;
-				
-				while ( NULL != item->next ) {
-				 	item = item->next;
+				item = globalTable[insertPos];
+
+				item->color = lastColor;
+				item->valid = 3;
+
+				while ( NULL != lastItem->next ) {
+					nextItem = lastItem->next;
+
+				 	newColor = (COLOR_LIST*) malloc(sizeof(COLOR_LIST));
+					newColor->color = nextItem->color;
+					newColor->valid = 5;
+					newColor->next = nextItem->next;
+
+					item->next = newColor;
+
+					item = newColor;
+
+					if ( NULL == lastItem->next ) { break; }
+
+				 	lastItem = lastItem->next;
 				}
 
 				newColor = (COLOR_LIST*) malloc(sizeof(COLOR_LIST));
-				if ( item->valid ) {
+				if ( valid ) {
 					newColor->color = currColor;
 				} else {
 					newColor->color = lastColor;
@@ -524,29 +642,28 @@ default:
 				newColor->valid = 4;
 				newColor->next = NULL;
 
-				globalTable[insertPos]->next = newColor;
+				item->next = newColor;
 
-				item = globalTable[insertPos];
-
-				if ( !item->valid ) {	//new color to table
+				if ( ! valid ) {	//new color to table
+					item = globalTable[insertPos];
 				 	do {
-						colorBMP[outCounter++] = junk;
+						colorBMP[outCounter++] = item->color;
 						if ( NULL == item->next ) { break; }
 				 		item = item->next;
 				 	} while ( NULL != item );
 				}
 
 				insertPos++;
+			} else {
+				colorBMP[outCounter++] = currItem->color;
 			}
-
-			printDebug(SHOW_TABLE,".");
 		}
 	}
 	
 	printDebug(SHOW_TABLE,"\n");
 
 	//for (i = 0; i < sizeOfGlobalTable; ++i) {
-	for (i = 0; i < 20; ++i) {
+/*	for (i = 0; i < 20; ++i) {
 		j = i + sizeOfGlobalTable;
 		item = globalTable[i];
 		printDebug(SHOW_TABLE,"%2X: %2X %2X %2X %5s %d\t",
@@ -568,7 +685,7 @@ default:
 		}
 
 		printDebug(SHOW_TABLE,"\n");
-	}
+	}*/
 
 //////////////////////////////
 // Create BMP file
@@ -629,15 +746,18 @@ default:
 		//Write a pixel to outputFile
 		for(j = 0; j < bih.biWidth; j++)
 		{
-			currRGB = &(colorBMP[outCounter++]);
+			currRGB = &(colorBMP[(bih.biHeight-1-i)*bih.biWidth+j]);
 
-			printDebug(SHOW_OUT_DATA,"\x1b[38;2;%d;%d;%dm""X""\x1b[38;2;255;255;255m",
+			printDebug(SHOW_OUT_DATA,"\x1b[38;2;%d;%d;%dm""X""\x1b[38;2;0m",
 				currRGB->cRed, currRGB->cGreen, currRGB->cBlue);
 
 		//	printDebug(SHOW_OUT_DATA,"%2X;%2X;%2X ",
 		//		currRGB->cRed, currRGB->cGreen, currRGB->cBlue);
 
-			fwrite(&currRGB, sizeof(COLORREF_RGB), 1, outputFile);
+			//fwrite(&currRGB, sizeof(COLORREF_RGB), 1, outputFile);
+			fwrite(&currRGB->cBlue, sizeof(BYTE), 1, outputFile);
+			fwrite(&currRGB->cGreen, sizeof(BYTE), 1, outputFile);
+			fwrite(&currRGB->cRed, sizeof(BYTE), 1, outputFile);
 		}
 		
 		printDebug(SHOW_OUT_DATA,"\n");
@@ -649,13 +769,12 @@ default:
 		}
 	}
 
-	//fseek(outputFile, 0, SEEK_END); // seek to end of file
-	gif2bmp->bmpSize = ftell(outputFile); // get current file pointer
+	gif2bmp->bmpSize = bfh.bfSize;
 
 //********************************************************
 //	Deallocation section
 //********************************************************
-
+/*
 	if ( hasGlobalTable ) {
 		free(globalTable);
 	}
@@ -666,6 +785,6 @@ default:
 
 	free(gifData);
 	free(colorBMP);
-
+*/
 	return 0;
 }
