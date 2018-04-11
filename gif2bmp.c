@@ -74,7 +74,7 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 	BYTE GCT, back_color, pixel_ratio;
 	BYTE hasGlobalTable, colorResolution, sortOfGlobalTable;
 	WORD sizeOfGlobalTable;
-	int maxOfGlobalTable;
+	int maxOfTable;
 	
 	//Extensions
 	BYTE end_of_exts = 0;
@@ -86,8 +86,7 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 
 	//Color Table
 	COLORREF_RGB color;
-	COLOR_LIST **globalTable;
-	COLORREF_RGB *localTable;
+	COLOR_LIST **colorTable;
 	WORD order;
 	WORD ClearCode, EOICode;
 
@@ -121,7 +120,7 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 	int currPos;
 
 	//auxiliary
-	int i, j;
+	int i, j, pom;
 
 //////////////////////////////
 // Read GIF file
@@ -186,22 +185,22 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 	if ( hasGlobalTable ) {
 		order = 0;
 
-		maxOfGlobalTable = 2 * sizeOfGlobalTable;
+		maxOfTable = 2 * sizeOfGlobalTable;
 
-		globalTable = (COLOR_LIST**) malloc(sizeof(COLOR_LIST*) * 2 * sizeOfGlobalTable);
+		colorTable = (COLOR_LIST**) malloc(sizeof(COLOR_LIST*) * 2 * sizeOfGlobalTable);
 
-		if ( NULL == globalTable ) {
+		if ( NULL == colorTable ) {
 			fprintf(stderr, "Error when allocation Global Table\n");
 			return -1;
 		}
 
-		for (i = 0; i < maxOfGlobalTable; ++i) {
+		for (i = 0; i < maxOfTable; ++i) {
 			newColor = (COLOR_LIST*) malloc(sizeof(COLOR_LIST));
 			newColor->color = white;
 			newColor->valid = 0;
 			newColor->next = NULL;
 
-			globalTable[i] = newColor;
+			colorTable[i] = newColor;
 		}
 
 		for (i = 0; i < sizeOfGlobalTable; ++i) {
@@ -210,8 +209,8 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 			fread(&color.cGreen, sizeof(BYTE), 1, inputFile);
 			fread(&color.cBlue, sizeof(BYTE), 1, inputFile);
 
-			globalTable[i]->color = color;
-			globalTable[i]->valid = 1;
+			colorTable[i]->color = color;
+			colorTable[i]->valid = 1;
 
 			printDebug(SHOW_RGB_TABLE,"%2X\t%X\t%X\t%X\n",
 				order++,color.cRed,color.cGreen,color.cBlue);
@@ -220,12 +219,12 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 		insertPos = sizeOfGlobalTable;
 
 		ClearCode	= insertPos;
-		globalTable[insertPos]->valid = 2;
-		globalTable[insertPos++]->color	= white;	//Clear Code
+		colorTable[insertPos]->valid = 2;
+		colorTable[insertPos++]->color	= white;	//Clear Code
 
 		EOICode		= insertPos;
-		globalTable[insertPos]->valid = 2;
-		globalTable[insertPos++]->color	= white;	//End Of Information Code
+		colorTable[insertPos]->valid = 2;
+		colorTable[insertPos++]->color	= white;	//End Of Information Code
 	}
 
 //********************************************************
@@ -320,52 +319,25 @@ case 0x2C:
 //	Local Color Table section
 //********************************************************
 
-/*	if ( hasLocalTable ) {
-		order = 0;
-		
-		localTable = (COLORREF_RGB*) malloc(sizeof(COLORREF_RGB) * sizeOfLocalTable);
-
-		if ( NULL == localTable ) {
-			fprintf(stderr, "Error when allocation Local Table\n");
-			return -1;
-		}
-
-		for (i = 0; i < sizeOfLocalTable; ++i) {
-			localTable[i] = white;
-		}
-
-		for (i = 0; i < sizeOfLocalTable; ++i) {
-			//Read color table
-			fread(&color.cRed, sizeof(BYTE), 1, inputFile);
-			fread(&color.cGreen, sizeof(BYTE), 1, inputFile);
-			fread(&color.cBlue, sizeof(BYTE), 1, inputFile);
-
-			localTable[i] = color;
-
-			//printDebug(SHOW_RGB_TABLE,"%2X\t%d (%X)\t%d (%X)\t%d (%X)\n",order++,color.cRed,color.cRed,color.cGreen,color.cGreen,color.cBlue,color.cBlue);
-			printDebug(SHOW_RGB_TABLE,"%2X\t%X\t%X\t%X\n",order++,color.cRed,color.cGreen,color.cBlue);
-		}
-	}
-	*/
 	if ( hasLocalTable ) {
 		order = 0;
 
-		maxOfGlobalTable = 2 * sizeOfLocalTable;
+		maxOfTable = 2 * sizeOfLocalTable;
 
-		globalTable = (COLOR_LIST**) malloc(sizeof(COLOR_LIST*) * 2 * sizeOfLocalTable);
+		colorTable = (COLOR_LIST**) malloc(sizeof(COLOR_LIST*) * 2 * sizeOfLocalTable);
 
-		if ( NULL == globalTable ) {
+		if ( NULL == colorTable ) {
 			fprintf(stderr, "Error when allocation Local Table\n");
 			return -1;
 		}
 
-		for (i = 0; i < 2 * sizeOfLocalTable; ++i) {
+		for (i = 0; i < maxOfTable; ++i) {
 			newColor = (COLOR_LIST*) malloc(sizeof(COLOR_LIST));
 			newColor->color = white;
 			newColor->valid = 0;
 			newColor->next = NULL;
 
-			globalTable[i] = newColor;
+			colorTable[i] = newColor;
 		}
 
 		for (i = 0; i < sizeOfLocalTable; ++i) {
@@ -374,8 +346,8 @@ case 0x2C:
 			fread(&color.cGreen, sizeof(BYTE), 1, inputFile);
 			fread(&color.cBlue, sizeof(BYTE), 1, inputFile);
 
-			globalTable[i]->color = color;
-			globalTable[i]->valid = 1;
+			colorTable[i]->color = color;
+			colorTable[i]->valid = 1;
 
 			printDebug(SHOW_RGB_TABLE,"%2X\t%X\t%X\t%X\n",
 				order++,color.cRed,color.cGreen,color.cBlue);
@@ -384,12 +356,12 @@ case 0x2C:
 		insertPos = sizeOfLocalTable;
 
 		ClearCode	= insertPos;
-		globalTable[insertPos]->valid = 2;
-		globalTable[insertPos++]->color	= white;	//Clear Code
+		colorTable[insertPos]->valid = 2;
+		colorTable[insertPos++]->color	= white;	//Clear Code
 
 		EOICode		= insertPos;
-		globalTable[insertPos]->valid = 2;
-		globalTable[insertPos++]->color	= white;	//End Of Information Code
+		colorTable[insertPos]->valid = 2;
+		colorTable[insertPos++]->color	= white;	//End Of Information Code
 	}
 
 //********************************************************
@@ -560,15 +532,11 @@ default:
 		fprintf(stderr, "Error when allocation Color BMP Table\n");
 		return -1;
 	}
-	
-	printDebug(SHOW_TABLE,"%d<<\n",(gifData[dataCounter]));
 
 	currPos = gifData[dataCounter];
-	
-	printDebug(SHOW_TABLE,"%d > %d = %d\n", maxOfGlobalTable, currPos, maxOfGlobalTable > currPos);
 
-	if ( maxOfGlobalTable > currPos && globalTable[currPos]->valid ) {
-		lastColor = globalTable[currPos]->color;
+	if ( maxOfTable > currPos && colorTable[currPos]->valid ) {
+		lastColor = colorTable[currPos]->color;
 	} else {
 		lastColor = junk;
 	}
@@ -581,7 +549,7 @@ default:
 
 		currPos = gifData[dataCounter];
 
-		if ( maxOfGlobalTable <= currPos ) {
+		if ( maxOfTable <= currPos ) {
 			fprintf(stderr, "Index out of range!\n");
 			return -1;
 		}
@@ -589,12 +557,33 @@ default:
 		if ( ClearCode == currPos ) {
 			printDebug(SHOW_TABLE,"Clear Code\n");
 			//REINIT TABLE
-			printDebug(SHOW_TABLE,"\x1b[38;2;200;50;200m""!!!!!""\x1b[0m\n");
+			printDebug(SHOW_TABLE,"\x1b[48;2;200;50;200m""!!!!!""\x1b[0m%d\n",dataCounter);
+
+			insertPos = EOICode + 1;
+
+			//reinitiallize rest of table (after EOI code)
+			for (i = insertPos; i < maxOfTable; ++i) {
+				item = colorTable[i];
+
+				if ( NULL != item->next) {
+					nextItem = item->next;
+					while ( NULL != nextItem->next ) {
+						currItem = nextItem;
+						nextItem = currItem->next;
+						free(currItem);
+						if ( NULL == nextItem->next) { break; }
+					}
+				}
+
+				item->color = white;
+				item->valid = 0;
+				item->next = NULL;
+			}
 		} else {
 			lastColor = currColor;
 			lastItem = currItem;
 
-			currItem = globalTable[currPos];
+			currItem = colorTable[currPos];
 
 			currColor = currItem->color;
 
@@ -611,7 +600,28 @@ default:
 				 	} while ( NULL != item );
 				}
 
-				item = globalTable[insertPos];
+				//Enlarge global color table - 2x larger
+				if ( maxOfTable == insertPos ) {
+					colorTable = (COLOR_LIST**) realloc(colorTable, sizeof(COLOR_LIST*) * 2 * maxOfTable);
+					maxOfTable *= 2;
+
+					if ( NULL == colorTable ) {
+						fprintf(stderr, "Error when reallocation Global Table\n");
+						return -1;
+					}
+
+					//Initiallize new members
+					for (i = (maxOfTable >> 1); i < maxOfTable; ++i) {
+						newColor = (COLOR_LIST*) malloc(sizeof(COLOR_LIST));
+						newColor->color = white;
+						newColor->valid = 0;
+						newColor->next = NULL;
+
+						colorTable[i] = newColor;
+					}
+				}
+
+				item = colorTable[insertPos];
 
 				item->color = lastColor;
 				item->valid = 3;
@@ -645,7 +655,7 @@ default:
 				item->next = newColor;
 
 				if ( ! valid ) {	//new color to table
-					item = globalTable[insertPos];
+					item = colorTable[insertPos];
 				 	do {
 						colorBMP[outCounter++] = item->color;
 						if ( NULL == item->next ) { break; }
@@ -659,24 +669,30 @@ default:
 			}
 		}
 	}
-	
+
+// Print global/local color table	
 	printDebug(SHOW_TABLE,"\n");
 
-	//for (i = 0; i < sizeOfGlobalTable; ++i) {
-/*	for (i = 0; i < 20; ++i) {
-		j = i + sizeOfGlobalTable;
-		item = globalTable[i];
+	if ( hasGlobalTable ) {
+		pom = sizeOfGlobalTable;
+	} else if ( hasLocalTable) {
+		pom = sizeOfLocalTable;
+	}
+
+	for (i = 0; i < pom; ++i) {
+		j = i + pom;
+		item = colorTable[i];
 		printDebug(SHOW_TABLE,"%2X: %2X %2X %2X %5s %d\t",
 			i, item->color.cRed, item->color.cGreen, 
 			item->color.cBlue,
 			(NULL == item->next) ? "null" : "X",item->valid);
-		item = globalTable[j];
+		item = colorTable[j];
 		printDebug(SHOW_TABLE,"%2X: %2X %2X %2X %5s %d",
 			j, item->color.cRed, item->color.cGreen,
 			item->color.cBlue, (NULL == item->next) ? "null" : "X",
 			item->valid);
 		
-		item = globalTable[j]->next;
+		item = colorTable[j]->next;
 		while ( NULL != item ) {
 			printDebug(SHOW_TABLE,"\t%2X %2X %2X %5s %d",
 				item->color.cRed, item->color.cGreen, item->color.cBlue,
@@ -685,7 +701,7 @@ default:
 		}
 
 		printDebug(SHOW_TABLE,"\n");
-	}*/
+	}
 
 //////////////////////////////
 // Create BMP file
@@ -746,13 +762,15 @@ default:
 		//Write a pixel to outputFile
 		for(j = 0; j < bih.biWidth; j++)
 		{
-			currRGB = &(colorBMP[(bih.biHeight-1-i)*bih.biWidth+j]);
+			currRGB = &(colorBMP[i*bih.biWidth+j]);
 
-			printDebug(SHOW_OUT_DATA,"\x1b[38;2;%d;%d;%dm""X""\x1b[38;2;0m",
+			printDebug(SHOW_OUT_DATA,"\x1b[48;2;%d;%d;%dm""  ""\x1b[0m",
 				currRGB->cRed, currRGB->cGreen, currRGB->cBlue);
 
 		//	printDebug(SHOW_OUT_DATA,"%2X;%2X;%2X ",
 		//		currRGB->cRed, currRGB->cGreen, currRGB->cBlue);
+
+			currRGB = &(colorBMP[(bih.biHeight-1-i)*bih.biWidth+j]);
 
 			//fwrite(&currRGB, sizeof(COLORREF_RGB), 1, outputFile);
 			fwrite(&currRGB->cBlue, sizeof(BYTE), 1, outputFile);
@@ -774,17 +792,26 @@ default:
 //********************************************************
 //	Deallocation section
 //********************************************************
-/*
-	if ( hasGlobalTable ) {
-		free(globalTable);
-	}
 
-	if ( hasLocalTable ) {
-		free(localTable);
+	if ( hasGlobalTable || hasLocalTable ) {
+		for (i = 0; i < maxOfTable; ++i) {
+			item = colorTable[i];
+
+			while ( NULL != item->next ) {
+				currItem = item;
+				item = currItem->next;
+				free(currItem);
+				if ( NULL == item->next) { break; }
+			}
+
+			free(item);
+		}
+
+		free(colorTable);
 	}
 
 	free(gifData);
 	free(colorBMP);
-*/
+
 	return 0;
 }

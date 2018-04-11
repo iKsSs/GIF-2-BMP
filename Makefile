@@ -25,6 +25,9 @@ test:
 test2:
 	./$(PROG_NAME) -i ./test/ubuntu.gif -o test2.bmp 
 
+testAll:
+	./test.sh
+	
 pack:
 	mkdir -p ./$(DIR)
 	cp -t ./$(DIR) main.c gif2bmp.c gif2bmp.h Makefile gif2bmp.pdf
