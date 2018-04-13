@@ -411,11 +411,14 @@ case 0x2C:
 	printDebug(SHOW_DATA_SIZE,"Total data: %d\n",countOfData);
 
 	dataCounter = 0;
+
+	int first = 1;
+
+if ( 1 ) { //decode sub-block like if it was continuos
+	int current = 0;
+
 	order = 0;
 	over = 1;
-
-	int current = 0;
-	int first = 1;
 
 	for ( i = 0; i < (countOfRealData + countOfBytesOfEncData); ++i ) {
 
@@ -447,7 +450,7 @@ case 0x2C:
 				over = 0;
 				dataShift = 0;
 			} else {
-				gifData[dataCounter++] = lastCode >> dataShift++;
+				gifData[dataCounter] = lastCode >> dataShift++;
 
 				if ( dataShift == 8 ) {
 					over = 1;
@@ -455,12 +458,16 @@ case 0x2C:
 
 				masked = ((0xFF >> (8-dataShift)) & code) << (8 - dataShift);
 					
-				printDebug(SHOW_DATA_DETAIL,"%2X(%2X): %2X %2X %d - %2X %3X = %3X\n", code, lastCode,
-					(0xFF >> (8-dataShift)), ((0xFF >> (8-dataShift)) & code),
-					(8 - dataShift), gifData[(dataCounter-1)], masked << 1,
-					gifData[(dataCounter-1)] + (masked << 1));
+				printDebug(SHOW_DATA_DETAIL,"%2X(%2X): %2X %2X %d - %2X + %3X = %3X\n", code, lastCode,
+					(0xFF >> (8-dataShift)),
+					((0xFF >> (8-dataShift)) & code),
+					(8 - dataShift),
+					gifData[dataCounter],
+					masked << 1,
+					gifData[dataCounter] + (masked << 1));
 
-				gifData[(dataCounter-1)] += (masked << 1);
+				gifData[dataCounter] += (masked << 1);
+				dataCounter++;
 			}
 
 			printDebug(SHOW_DATA,"%2X ",code);
@@ -497,8 +504,92 @@ case 0x2C:
 		fprintf(stderr, "Wrong image data size\n");
 		return -1;
 	}
+} else {	//decode each sub-block individually
+	do {
+		fread(&bytesOfEncData, sizeof(BYTE), 1, inputFile);
+		
+		printDebug(SHOW_DATA && SHOW_DATA_SIZE,"Bytes of enc data\n");
+		printDebug(SHOW_DATA && SHOW_DATA_SIZE,"%d (%X)\n",bytesOfEncData,bytesOfEncData);
+		
+		if ( first ) {
+			printDebug(!SHOW_DATA && SHOW_DATA_SIZE,"Bytes of enc data\n");
+			printDebug(!SHOW_DATA && SHOW_DATA_SIZE,"%d (%X)",bytesOfEncData,bytesOfEncData);
+			first = 0;
+		} else {
+			printDebug(!SHOW_DATA && SHOW_DATA_SIZE,", %d (%X)",bytesOfEncData,bytesOfEncData);
+		}
+
+		order = 0;
+		over = 1;
+
+		for (i = 0; i < bytesOfEncData; i++) {
+			if ( 8 == LZWMinSize ) {
+				lastCode = code;
+
+				fread(&code, sizeof(BYTE), 1, inputFile);
+				
+				if ( over ) {
+					over = 0;
+					dataShift = 0;
+				} else {
+					gifData[dataCounter] = lastCode >> dataShift++;
+
+					if ( dataShift == 8 ) {
+						over = 1;
+					}
+
+					masked = ((0xFF >> (8-dataShift)) & code) << (8 - dataShift);
+						
+					printDebug(SHOW_DATA_DETAIL,"%2X(%2X): %2X %2X %d - %2X + %3X = %3X\n", code, lastCode,
+						(0xFF >> (8-dataShift)),
+						((0xFF >> (8-dataShift)) & code),
+						(8 - dataShift),
+						gifData[dataCounter],
+						masked << 1,
+						gifData[dataCounter] + (masked << 1));
+
+					gifData[dataCounter] += (masked << 1);
+					dataCounter++;
+				}
+
+				printDebug(SHOW_DATA,"%2X ",code);
+			} else if ( 2 == LZWMinSize ) {
+				fread(&code, sizeof(BYTE), 1, inputFile);
+
+				switch (order) {
+					case 0:
+						gifData[dataCounter++] = (0xE0 & code) >> 5;
+						gifData[dataCounter++] = (0x1C & code) >> 2;
+						lastCode = 0x03 & code;
+						order++;
+						break;
+					case 1:
+						gifData[dataCounter++] = lastCode + ((0x80 & code) >> 5);
+						gifData[dataCounter++] = (0x70 & code) >> 4;
+						gifData[dataCounter++] = (0x0E & code) >> 1;
+						lastCode = 0x01 & code;
+						order++;
+						break;
+					case 2:
+						gifData[dataCounter++] = lastCode + ((0xC0 & code) >> 5);
+						gifData[dataCounter++] = (0x38 & code) >> 3;
+						gifData[dataCounter++] = 0x07 & code;
+						order = 0;
+						break;
+				}
+			
+				printDebug(SHOW_DATA,"%2X ",code);			
+			}
+		}
+
+		if ( bytesOfEncData ) {
+			//gifData[dataCounter++] = (code >> dataShift);	//write remaining bits to output as byte
+			printDebug(SHOW_DATA,"\n");
+		}
+	} while ( 0x00 != bytesOfEncData );
 
 	printDebug(!SHOW_DATA,"\n");
+}
 
 	printDebug(SHOW_DATA_DETAIL,"Data detail: ");
 	for (i = 0; i < countOfData; i++) {
@@ -560,6 +651,7 @@ default:
 		colorBMP[i] = lastColor;
 	}
 
+	//write until EOICode
 	//for (dataCounter = 0; EOICode != gifData[dataCounter]; ++dataCounter) {
 	for (dataCounter = 0; dataCounter < countOfData; ++dataCounter) {
 
