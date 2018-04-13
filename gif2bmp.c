@@ -97,12 +97,12 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 	//Image Descriptor
 	DWORD NWCorner;
 	WORD imageWidth, imageHeight;
-	BYTE localColorTable, hasLocalTable;
+	BYTE localColorTable, hasLocalTable, interlaced;
 	WORD sizeOfLocalTable;
 
 	//Image Data
 	BYTE LZWMinSize, bytesOfEncData;
-	int countOfData;
+	int countOfData, countOfRealData;
 	long int savedPos;
 	WORD *gifData;
 	BYTE code, lastCode;
@@ -158,7 +158,7 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 	hasGlobalTable		= (0x80 & GCT) >> 7;
 	colorResolution		= (0x70 & GCT) >> 4;
 	sortOfGlobalTable	= (0x08 & GCT) >> 3;
-	sizeOfGlobalTable	= pow (2, (0x07 & GCT) + 1 );
+	sizeOfGlobalTable	= hasGlobalTable ? pow (2, (0x07 & GCT) + 1 ) : 0;
 
 	printDebug(SHOW_HEADER,"CanvasW\tCanvasH\tGCT\t\tback_color\tpixel_ratio\n");
 	printDebug(SHOW_HEADER,"%d (%X)\t%d (%X)\t%X - "BYTE_TO_BINARY_PATTERN"\t%d (%X)\t\t%d (%X)\n",
@@ -309,11 +309,13 @@ case 0x2C:
 	fread(&localColorTable, sizeof(BYTE), 1, inputFile);
 
 	hasLocalTable 		= (0x80 & localColorTable) >> 7;
-	sizeOfLocalTable	= pow (2, (0x07 & localColorTable) + 1 );
+	sizeOfLocalTable	= hasLocalTable ? pow (2, (0x07 & localColorTable) + 1 ) : 0;
+	interlaced			= (0x40 & localColorTable) >> 6;
 
-	printDebug(SHOW_IMG_DESC,"NWcor\timgW\timgH\tlocalColorTable\tlocalTable\tsizeOfLocalTable\n");
-	printDebug(SHOW_IMG_DESC,"%d (%X)\t%d (%X)\t%d (%X)\t%X - "BYTE_TO_BINARY_PATTERN"\t%d\t%d\n",
-		NWCorner,NWCorner,imageWidth,imageWidth,imageHeight,imageHeight,localColorTable,BYTE_TO_BINARY(localColorTable),hasLocalTable,sizeOfLocalTable);
+	printDebug(SHOW_IMG_DESC,"NWcor\timgW\timgH\tlocalColorTable\tlocalTable\tsizeOfLocalTable\tinterlaced\n");
+	printDebug(SHOW_IMG_DESC,"%d (%X)\t%d (%X)\t%d (%X)\t%X - "BYTE_TO_BINARY_PATTERN"\t%d\t%d\t%d\n",
+		NWCorner,NWCorner,imageWidth,imageWidth,imageHeight,imageHeight,
+		localColorTable,BYTE_TO_BINARY(localColorTable),hasLocalTable,sizeOfLocalTable,interlaced);
 
 //********************************************************
 //	Local Color Table section
@@ -375,6 +377,9 @@ case 0x2C:
 	printDebug(SHOW_DATA_SIZE,"%d (%X)\n",LZWMinSize,LZWMinSize);
 
 	countOfData = 0;
+	countOfRealData = 0;
+
+	int countOfbytesOfEncData = 0;
 
 	savedPos = ftell(inputFile);	//save file pointer position
 
@@ -382,11 +387,14 @@ case 0x2C:
 		fread(&bytesOfEncData, sizeof(BYTE), 1, inputFile);
 
 		countOfData += bytesOfEncData;
+		countOfbytesOfEncData++;
 
 		fseek( inputFile, ftell(inputFile)+bytesOfEncData, SEEK_SET );	//shift file pointer position
 	} while ( 0x00 != bytesOfEncData );
 
 	fseek( inputFile, savedPos, SEEK_SET );		//recover file pointer position
+
+	countOfRealData = countOfData;
 
 	countOfData = (countOfData << 3) / (LZWMinSize + 1);		// LZWmin bit encoded in 8 bit
 
@@ -406,50 +414,63 @@ case 0x2C:
 	dataCounter = 0;
 	order = 0;
 
+	int current = 0;
 	int first = 1;
 
-	do {
-		fread(&bytesOfEncData, sizeof(BYTE), 1, inputFile);
+printf("--%d %d %d--\n", countOfData, countOfRealData, countOfbytesOfEncData);
+
+	for ( i = 0; i < (countOfRealData + countOfbytesOfEncData); ++i ) {
+
+		if ( i == current ) {
+			fread(&bytesOfEncData, sizeof(BYTE), 1, inputFile);
+
+printf("DATA: %2X %d(%d)\n",bytesOfEncData, current, current+bytesOfEncData+1);
 		
-		printDebug(SHOW_DATA && SHOW_DATA_SIZE,"Bytes of enc data\n");
-		printDebug(SHOW_DATA && SHOW_DATA_SIZE,"%d (%X)\n",bytesOfEncData,bytesOfEncData);
-		
-		if ( first ) {
-			printDebug(!SHOW_DATA && SHOW_DATA_SIZE,"Bytes of enc data\n");
-			printDebug(!SHOW_DATA && SHOW_DATA_SIZE,"%d (%X)",bytesOfEncData,bytesOfEncData);
-			first = 0;
+			printDebug(SHOW_DATA && SHOW_DATA_SIZE,"Bytes of enc data\n");
+			printDebug(SHOW_DATA && SHOW_DATA_SIZE,"%d (%X)\n",bytesOfEncData,bytesOfEncData);
+
+			if ( first ) {
+				printDebug(!SHOW_DATA && SHOW_DATA_SIZE,"Bytes of enc data\n");
+				printDebug(!SHOW_DATA && SHOW_DATA_SIZE,"%d (%X)",bytesOfEncData,bytesOfEncData);
+				first = 0;
+			} else {
+				printDebug(!SHOW_DATA && SHOW_DATA_SIZE,", %d (%X)",bytesOfEncData,bytesOfEncData);
+			}
+
+			current += bytesOfEncData + 1;
+			continue;
 		} else {
-			printDebug(!SHOW_DATA && SHOW_DATA_SIZE,", %d (%X)",bytesOfEncData,bytesOfEncData);
+			printDebug(SHOW_DATA,"\n");
 		}
 
-		for (i = 0; i < bytesOfEncData; i++) {
-			if ( 8 == LZWMinSize ) {
-				lastCode = code;
 
-				fread(&code, sizeof(BYTE), 1, inputFile);
-				
-				if ( over ) {
-					over = 0;
-					dataShift = 0;
-				} else {
-					gifData[dataCounter++] = lastCode >> dataShift++;
+		if ( 8 == LZWMinSize ) {
+			lastCode = code;
 
-					if ( dataShift == 8 ) {
-						over = 1;
-					}
+			fread(&code, sizeof(BYTE), 1, inputFile);
+			
+			if ( over ) {
+				over = 0;
+				dataShift = 0;
+			} else {
+				gifData[dataCounter++] = lastCode >> dataShift++;
 
-					masked = ((0xFF >> (8-dataShift)) & code) << (8 - dataShift);
-						
-					printDebug(SHOW_DATA_DETAIL,"%2X(%2X): %2X %2X %d - %2X %3X = %3X\n", code, lastCode,
-						(0xFF >> (8-dataShift)), ((0xFF >> (8-dataShift)) & code),
-						(8 - dataShift), gifData[(dataCounter-1)], masked << 1,
-						gifData[(dataCounter-1)] + (masked << 1));
-
-					gifData[(dataCounter-1)] += (masked << 1);
+				if ( dataShift == 8 ) {
+					over = 1;
 				}
 
-				printDebug(SHOW_DATA,"%2X ",code);
-			} else if ( 2 == LZWMinSize ) {
+				masked = ((0xFF >> (8-dataShift)) & code) << (8 - dataShift);
+					
+				printDebug(SHOW_DATA_DETAIL,"%2X(%2X): %2X %2X %d - %2X %3X = %3X\n", code, lastCode,
+					(0xFF >> (8-dataShift)), ((0xFF >> (8-dataShift)) & code),
+					(8 - dataShift), gifData[(dataCounter-1)], masked << 1,
+					gifData[(dataCounter-1)] + (masked << 1));
+
+				gifData[(dataCounter-1)] += (masked << 1);
+			}
+
+			printDebug(SHOW_DATA,"%2X ",code);
+		} else if ( 2 == LZWMinSize ) {
 				fread(&code, sizeof(BYTE), 1, inputFile);
 
 				switch (order) {
@@ -476,12 +497,12 @@ case 0x2C:
 			
 				printDebug(SHOW_DATA,"%2X ",code);			
 			}
-		}
+	}
 
-		if ( bytesOfEncData ) {
-			printDebug(SHOW_DATA,"\n");
-		}
-	} while ( 0x00 != bytesOfEncData );
+	if ( 0 != bytesOfEncData ) {
+		fprintf(stderr, "Wrong image data size\n");
+		return -1;
+	}
 
 	printDebug(!SHOW_DATA,"\n");
 
@@ -545,9 +566,16 @@ default:
 		colorBMP[i] = lastColor;
 	}
 
-	for (dataCounter = 0; EOICode != gifData[dataCounter]; ++dataCounter) {
+	//for (dataCounter = 0; EOICode != gifData[dataCounter]; ++dataCounter) {
+	for (dataCounter = 0; dataCounter < countOfData; ++dataCounter) {
 
 		currPos = gifData[dataCounter];
+
+		if ( EOICode == currPos ) {
+			printDebug(SHOW_TABLE,"EOICode\n");
+			//REINIT TABLE
+			printDebug(SHOW_TABLE,"\x1b[48;2;200;50;200m""!!!!!""\x1b[0m%d\n",dataCounter);
+		}
 
 		if ( maxOfTable <= currPos ) {
 			fprintf(stderr, "Index out of range!\n");
@@ -595,18 +623,19 @@ default:
 					item = currItem;
 				 	do {
 						colorBMP[outCounter++] = item->color;
+						//has more members?
 				 		if ( NULL == item->next ) { break; }
 				 		item = item->next;
 				 	} while ( NULL != item );
 				}
 
-				//Enlarge global color table - 2x larger
+				//Enlarge color table - 2x larger
 				if ( maxOfTable == insertPos ) {
 					colorTable = (COLOR_LIST**) realloc(colorTable, sizeof(COLOR_LIST*) * 2 * maxOfTable);
 					maxOfTable *= 2;
 
 					if ( NULL == colorTable ) {
-						fprintf(stderr, "Error when reallocation Global Table\n");
+						fprintf(stderr, "Error when reallocation Table\n");
 						return -1;
 					}
 
@@ -654,10 +683,11 @@ default:
 
 				item->next = newColor;
 
-				if ( ! valid ) {	//new color to table
+				if ( ! valid ) {	//color is not in table
 					item = colorTable[insertPos];
 				 	do {
 						colorBMP[outCounter++] = item->color;
+						//has more members?
 						if ( NULL == item->next ) { break; }
 				 		item = item->next;
 				 	} while ( NULL != item );
@@ -669,6 +699,8 @@ default:
 			}
 		}
 	}
+
+	printf("Wrote of size: %d (%d) of %d\n", outCounter, dataCounter, colorSize);
 
 // Print global/local color table	
 	printDebug(SHOW_TABLE,"\n");
