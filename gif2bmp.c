@@ -102,14 +102,14 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 
 	//Image Data
 	BYTE LZWMinSize, bytesOfEncData;
-	int countOfData, countOfRealData;
+	int countOfData, countOfRealData, countOfBytesOfEncData;
 	long int savedPos;
 	WORD *gifData;
 	BYTE code, lastCode;
 	int dataCounter;
 	BYTE dataShift;
 	BYTE masked;
-	BYTE over = 1;
+	BYTE over;
 
 	//Create Table
 	int outCounter, colorSize, insertPos;
@@ -378,8 +378,7 @@ case 0x2C:
 
 	countOfData = 0;
 	countOfRealData = 0;
-
-	int countOfbytesOfEncData = 0;
+	countOfBytesOfEncData = 0;
 
 	savedPos = ftell(inputFile);	//save file pointer position
 
@@ -387,7 +386,7 @@ case 0x2C:
 		fread(&bytesOfEncData, sizeof(BYTE), 1, inputFile);
 
 		countOfData += bytesOfEncData;
-		countOfbytesOfEncData++;
+		countOfBytesOfEncData++;
 
 		fseek( inputFile, ftell(inputFile)+bytesOfEncData, SEEK_SET );	//shift file pointer position
 	} while ( 0x00 != bytesOfEncData );
@@ -413,18 +412,16 @@ case 0x2C:
 
 	dataCounter = 0;
 	order = 0;
+	over = 1;
 
 	int current = 0;
 	int first = 1;
 
-printf("--%d %d %d--\n", countOfData, countOfRealData, countOfbytesOfEncData);
+	for ( i = 0; i < (countOfRealData + countOfBytesOfEncData); ++i ) {
 
-	for ( i = 0; i < (countOfRealData + countOfbytesOfEncData); ++i ) {
-
+		//current byte in file has value of bytes of encrypted data
 		if ( i == current ) {
 			fread(&bytesOfEncData, sizeof(BYTE), 1, inputFile);
-
-printf("DATA: %2X %d(%d)\n",bytesOfEncData, current, current+bytesOfEncData+1);
 		
 			printDebug(SHOW_DATA && SHOW_DATA_SIZE,"Bytes of enc data\n");
 			printDebug(SHOW_DATA && SHOW_DATA_SIZE,"%d (%X)\n",bytesOfEncData,bytesOfEncData);
@@ -439,10 +436,7 @@ printf("DATA: %2X %d(%d)\n",bytesOfEncData, current, current+bytesOfEncData+1);
 
 			current += bytesOfEncData + 1;
 			continue;
-		} else {
-			printDebug(SHOW_DATA,"\n");
 		}
-
 
 		if ( 8 == LZWMinSize ) {
 			lastCode = code;
@@ -471,32 +465,32 @@ printf("DATA: %2X %d(%d)\n",bytesOfEncData, current, current+bytesOfEncData+1);
 
 			printDebug(SHOW_DATA,"%2X ",code);
 		} else if ( 2 == LZWMinSize ) {
-				fread(&code, sizeof(BYTE), 1, inputFile);
+			fread(&code, sizeof(BYTE), 1, inputFile);
 
-				switch (order) {
-					case 0:
-						gifData[dataCounter++] = (0xE0 & code) >> 5;
-						gifData[dataCounter++] = (0x1C & code) >> 2;
-						lastCode = 0x03 & code;
-						order++;
-						break;
-					case 1:
-						gifData[dataCounter++] = lastCode + ((0x80 & code) >> 5);
-						gifData[dataCounter++] = (0x70 & code) >> 4;
-						gifData[dataCounter++] = (0x0E & code) >> 1;
-						lastCode = 0x01 & code;
-						order++;
-						break;
-					case 2:
-						gifData[dataCounter++] = lastCode + ((0xC0 & code) >> 5);
-						gifData[dataCounter++] = (0x38 & code) >> 3;
-						gifData[dataCounter++] = 0x07 & code;
-						order = 0;
-						break;
-				}
-			
-				printDebug(SHOW_DATA,"%2X ",code);			
+			switch (order) {
+				case 0:
+					gifData[dataCounter++] = (0xE0 & code) >> 5;
+					gifData[dataCounter++] = (0x1C & code) >> 2;
+					lastCode = 0x03 & code;
+					order++;
+					break;
+				case 1:
+					gifData[dataCounter++] = lastCode + ((0x80 & code) >> 5);
+					gifData[dataCounter++] = (0x70 & code) >> 4;
+					gifData[dataCounter++] = (0x0E & code) >> 1;
+					lastCode = 0x01 & code;
+					order++;
+					break;
+				case 2:
+					gifData[dataCounter++] = lastCode + ((0xC0 & code) >> 5);
+					gifData[dataCounter++] = (0x38 & code) >> 3;
+					gifData[dataCounter++] = 0x07 & code;
+					order = 0;
+					break;
 			}
+		
+			printDebug(SHOW_DATA,"%2X ",code);			
+		}
 	}
 
 	if ( 0 != bytesOfEncData ) {
@@ -573,8 +567,6 @@ default:
 
 		if ( EOICode == currPos ) {
 			printDebug(SHOW_TABLE,"EOICode\n");
-			//REINIT TABLE
-			printDebug(SHOW_TABLE,"\x1b[48;2;200;50;200m""!!!!!""\x1b[0m%d\n",dataCounter);
 		}
 
 		if ( maxOfTable <= currPos ) {
@@ -585,7 +577,6 @@ default:
 		if ( ClearCode == currPos ) {
 			printDebug(SHOW_TABLE,"Clear Code\n");
 			//REINIT TABLE
-			printDebug(SHOW_TABLE,"\x1b[48;2;200;50;200m""!!!!!""\x1b[0m%d\n",dataCounter);
 
 			insertPos = EOICode + 1;
 
