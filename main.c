@@ -28,6 +28,8 @@ int main(int argc, char *argv[]) {
 	FILE *fp_i, *fp_o, *fp_l;
 	
 	tGIF2BMP record;
+
+	int ret;
 	
     int opt;
     extern char *optarg;
@@ -55,26 +57,26 @@ int main(int argc, char *argv[]) {
     }
 	
 	//open input file
-	if ( inputFile == NULL ) {
+	if ( NULL == inputFile ) {
 		fp_i = stdin;
 	}
 	else {
 		fp_i = fopen(inputFile,"rb+");
 		
-		if ( fp_i == NULL ) {
+		if ( NULL == fp_i ) {
 			fprintf(stderr, "Error: openning %s file\n", inputFile);
 			return 1;
 		}
 	}
 
 	//open output file
-	if ( outputFile == NULL ) {
+	if ( NULL == outputFile ) {
 		fp_o = stdout;
 	}
 	else {
 		fp_o = fopen(outputFile,"wb+");
 		
-		if ( fp_o == NULL ) {
+		if ( NULL == fp_o ) {
 			fprintf(stderr, "Error: openning %s file\n", outputFile);
 			fclose(fp_i);
 			return 1;
@@ -82,25 +84,29 @@ int main(int argc, char *argv[]) {
 	}
 
 	//open log file
-	if ( logFile != NULL ) {
+	if ( NULL != logFile ) {
 		fp_l = fopen(logFile,"w");
 		
-		if ( fp_l == NULL ) {
+		if ( NULL == fp_l ) {
 			fprintf(stderr, "Error: openning %s file\n", logFile);
 		} 
 	}
 
-	gif2bmp(&record, fp_i, fp_o);
+	ret = gif2bmp(&record, fp_i, fp_o);
 
-	if ( inputFile != NULL && fclose(fp_i) ) {
+	if ( NULL != inputFile && fclose(fp_i) ) {
 		fprintf(stderr, "Error: closing %s file\n", inputFile);
 	}
 	
-	if ( outputFile != NULL && fclose(fp_o) ) {
+	if ( NULL != outputFile && fclose(fp_o) ) {
 		fprintf(stderr, "Error: closing %s file\n", outputFile);
 	}
 
-	if ( logFile != NULL ) {
+	if ( -1 == ret && NULL != outputFile ) {
+		ret = remove(outputFile);
+	}
+
+	if ( NULL != logFile ) {
 		fprintf(fp_l, "login = xpastu00\n");
 		fprintf(fp_l, "uncodedSize = %ld\n", record.gifSize);	//v bytech
 		fprintf(fp_l, "codedSize = %ld\n", record.bmpSize);		//v bytech
