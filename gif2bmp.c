@@ -774,7 +774,7 @@ default:
 				//Enlarge color table - 2x larger
 				if ( maxOfTable == insertPos ) {
 				//	insertPos = EOICode + 1;
-					fprintf(stderr, "Error reallocation Table!!!\n");
+				//	fprintf(stderr, "Error reallocation Table!!!\n");
 				//		return -1;
 					colorTable = (COLOR_LIST**) realloc(colorTable, sizeof(COLOR_LIST*) * 2 * maxOfTable);
 					maxOfTable *= 2;
@@ -889,11 +889,28 @@ default:
 // Create BMP file
 //////////////////////////////
 	
+//////////////////////////////
+// Variable declarations
+//////////////////////////////
+	
+	//Header
+	BITMAPINFOHEADER bih;
+	BITMAPFILEHEADER bfh;
+
+	//Color
+	COLORREF_RGB *currRGB;
+
 	//auxiliary
-	BYTE padding = 0;
+	BYTE padding = 0;	//any value is possible
 	int padding_count;
 
-	BITMAPINFOHEADER bih;
+//////////////////////////////
+// Write BMP file
+//////////////////////////////
+
+//********************************************************
+//	Header section
+//********************************************************
 
 	//fill in info header of BMP
 	bih.biSize = sizeof(BITMAPINFOHEADER);
@@ -910,11 +927,8 @@ default:
 	//compute padding according to width and bit count
 	padding_count = ( 4 - ( (bih.biWidth * bih.biBitCount / 8) % 4) ) % 4;
 
-	bih.biSizeImage = bih.biWidth * bih.biHeight * 3 + bih.biWidth * padding_count;
-	
-	COLORREF_RGB *currRGB;
-
-	BITMAPFILEHEADER bfh;
+	//area * 3 colors per pixel + row * padding
+	bih.biSizeImage = bih.biWidth * bih.biHeight * 3 + bih.biHeight * padding_count;
 
 	//fill in file header of BMP
 	bfh.bfType = 0x424D; 	//dec: BM
@@ -922,11 +936,7 @@ default:
 	bfh.bfReserved1 = 0;
 	bfh.bfReserved2 = 0;
 	bfh.bfOffBits = sizeof(BITMAPFILEHEADER) + bih.biSize; 	//size of whole header
-		//toLittleEndian(4, &bfh.bfOffBits);
 	bfh.bfSize = sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER) + bih.biSizeImage;	//size of whole file
-		//toLittleEndian(4, &bfh.bfSize);
-	
-	gif2bmp->bmpSize = bfh.bfSize;
 
 	//write BMP header to outputFile
 	fwrite(&bfh, sizeof(BITMAPFILEHEADER), 1, outputFile);
@@ -936,6 +946,10 @@ default:
 											sizeof(UINT), sizeof(DWORD), sizeof(LONG), sizeof(WORD), sizeof(BYTE));
 
 	printDebug(SHOW_OUT_DATA, "Image: %d x %d -> %d\n", imageWidth, imageHeight, imageWidth * imageHeight);
+
+//********************************************************
+//	Write image Data section
+//********************************************************
 	
 	outCounter = 0;
 
@@ -968,6 +982,7 @@ default:
 		}
 	}
 
+	//get BMP file size
 	gif2bmp->bmpSize = bfh.bfSize;
 
 //********************************************************
