@@ -20,7 +20,16 @@
 
 #define BI_RGB 0
 
-#define DEBUG 1
+#define MAX_LZW_SIZE 12
+#define MAX_TABLE_SIZE pow(2,MAX_LZW_SIZE)
+
+#define BYTE_SIZE_IN_BITS 8
+
+#define DEBUG
+
+#define SHOW_TEST 1
+
+#define SHOW_GET_N 0
 
 #define SHOW_HEADER 1
 #define SHOW_RGB_TABLE 0
@@ -30,9 +39,9 @@
 #define SHOW_DATA 0
 #define SHOW_DATA_DETAIL 1
 #define SHOW_END 1
-#define SHOW_TABLE 1
+#define SHOW_TABLE 0
 
-#define SHOW_OUT_DATA 1
+#define SHOW_OUT_DATA 0
 
 extern void printDebug(const int show, const char *fmt, ...);
 
