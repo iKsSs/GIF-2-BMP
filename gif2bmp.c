@@ -656,13 +656,13 @@ default:
 				item->next = NULL;
 			}
 		} else {
-			lastColor = currColor;
 			lastItem = currItem;
 
 			//get next value
 			currItem = colorTable[currPos];
 
 			currColor = currItem->color;
+			lastColor = lastItem->color;
 
 			if ( !first ) {	//first color value is only printed out
 
