@@ -82,7 +82,7 @@ WORD reverse_word_binary(WORD in) {
 //return	WORD 	desired bits
 WORD get_n_bits(BYTE *data, BYTE size, int count) {
 
-	BYTE pom1, pom2;
+	BYTE pom1, pom2, pom3;
 	WORD mask = 0;
 	WORD ret;
 
@@ -107,6 +107,17 @@ WORD get_n_bits(BYTE *data, BYTE size, int count) {
 	ret = (pom1 << BYTE_SIZE_IN_BITS) | pom2;
 	ret <<= offset;
 	ret &= mask;
+
+	if ( 	(10 == size && (7 == offset)) || 
+			(11 == size && (6 == offset || 7 == offset)) ||
+			(12 == size && (5 == offset || 6 == offset || 7 == offset)) ||
+			(13 == size && (4 == offset || 5 == offset || 6 == offset || 7 == offset))) {
+		pom3 = *(data+member+2);
+		pom3 >>= (BYTE_SIZE_IN_BITS - offset);
+		ret |= pom3;
+		ret &= mask;
+	}
+
 	ret = reverse_word_binary(ret);
 
 	printDebug(SHOW_GET_N,"%d: %2X(%2X) %2X(%2X) (%d): %4X %d %4X = %4X\n", 
@@ -620,9 +631,25 @@ default:
 			break;
 		}
 
-		if ( maxOfTable <= currPos ) {
-			fprintf(stderr, "Index out of range!\n");
-			return -1;
+		if ( maxOfTable <= currPos || maxOfTable == insertPos ) {
+			//Enlarge color table - 2x larger
+			colorTable = (COLOR_LIST**) realloc(colorTable, sizeof(COLOR_LIST*) * 2 * maxOfTable);
+			maxOfTable *= 2;
+
+			if ( NULL == colorTable ) {
+				fprintf(stderr, "Error when reallocation Table\n");
+				return -1;
+			}
+
+			//Initiallize new members
+			for (i = (maxOfTable >> 1); i < maxOfTable; ++i) {
+				newColor = (COLOR_LIST*) malloc(sizeof(COLOR_LIST));
+				newColor->color = white;
+				newColor->valid = 0;
+				newColor->next = NULL;
+
+				colorTable[i] = newColor;
+			}
 		}
 
 		if ( ClearCode == currPos ) {
@@ -681,27 +708,6 @@ default:
 
 				//isn't achieved max Table size -> could be inserted
 				if ( !stopInsert ) {
-					//Enlarge color table - 2x larger
-					if ( maxOfTable == insertPos ) {
-						colorTable = (COLOR_LIST**) realloc(colorTable, sizeof(COLOR_LIST*) * 2 * maxOfTable);
-						maxOfTable *= 2;
-
-						if ( NULL == colorTable ) {
-							fprintf(stderr, "Error when reallocation Table\n");
-							return -1;
-						}
-
-						//Initiallize new members
-						for (i = (maxOfTable >> 1); i < maxOfTable; ++i) {
-							newColor = (COLOR_LIST*) malloc(sizeof(COLOR_LIST));
-							newColor->color = white;
-							newColor->valid = 0;
-							newColor->next = NULL;
-
-							colorTable[i] = newColor;
-						}
-					}
-				
 					//create new value in color table - first is last item
 					item = colorTable[insertPos];
 
@@ -831,8 +837,8 @@ default:
 	bih.biPlanes = 1;
 	bih.biBitCount = 24;
 	bih.biCompression = BI_RGB;
-	bih.biXPelsPerMeter = 4724;		//DPI x width
-	bih.biYPelsPerMeter = 4724;		//DPI x height
+	bih.biXPelsPerMeter = 0;		//DPI x width
+	bih.biYPelsPerMeter = 0;		//DPI x height
 	bih.biClrUsed = 0;
 	bih.biClrImportant = 0;
 
