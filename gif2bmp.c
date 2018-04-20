@@ -4,7 +4,7 @@
 //* * *                                               * * *//
 //* * *                Jakub Pastuszek                * * *//
 //* * *           xpastu00@stud.fit.vutbr.cz          * * *//
-//* * *                  april 2018                  * * *//
+//* * *                  april 2018                   * * *//
 //*********************************************************//
 
 #include "gif2bmp.h"
@@ -164,7 +164,7 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 	BYTE extension, ext_type;
 
 	//Graphics Control Extension section
-	BYTE size, transparency, transparentColor, endOfBlock, gce_loaded, img_loaded, localAux;
+	BYTE size, transparency, transparentColor, endOfBlock, gce_loaded, img_loaded;
 	WORD delay;
 
 	//Color Table
@@ -389,19 +389,17 @@ case 0x2C:
 
 		readB += fread(&Dnull, sizeof(DWORD), 1, inputFile);
 		readB += fread(&Dnull, sizeof(DWORD), 1, inputFile);
-		readB += fread(&localAux, sizeof(BYTE), 1, inputFile);
+        readB += fread(&Bnull, sizeof(BYTE), 1, inputFile);
 
-		sizeAux	= ((0x80 & localAux) >> 7) ? pow (2, (0x07 & localAux) + 1 ) : 0;
-		if ( ((0x80 & localAux) >> 7) ) {
-			for (i = 0; i < sizeAux; ++i) {
-				readB += fread(&Bnull, sizeof(BYTE), 1, inputFile);
-				readB += fread(&Bnull, sizeof(BYTE), 1, inputFile);
-				readB += fread(&Bnull, sizeof(BYTE), 1, inputFile);
-			}
-		}
+        sizeAux = ((0x80 & Bnull) >> 7) ? 3 * pow (2, (0x07 & Bnull) + 1 ) : 0;
+        if ( sizeAux ) {
+			fseek( inputFile, ftell(inputFile)+sizeAux, SEEK_SET );	//shift file pointer position
+			readB += sizeAux;
+        }
 
 		readB += fread(&Bnull, sizeof(BYTE), 1, inputFile);
 
+		//read image data
 		do {
 			readB += fread(&Bnull, sizeof(BYTE), 1, inputFile);
 			readB += Bnull;
@@ -681,18 +679,24 @@ default:
 				//free all next members
 				if ( NULL != item->next) {
 					nextItem = item->next;
-					while ( NULL != nextItem->next ) {
+					do {
 						currItem = nextItem;
-						nextItem = currItem->next;
+						if ( NULL == nextItem->next) { 
+							free(currItem);
+							break;
+						}
+						nextItem = currItem->next;						
 						free(currItem);
-						if ( NULL == nextItem->next) { break; }
-					}
+					} while ( NULL != nextItem->next );
 				}
 
 				item->color = white;
 				item->valid = 0;
 				item->next = NULL;
 			}
+
+			//due to not be uninitiallized
+			currItem = colorTable[back_color];
 		} else {
 			lastItem = currItem;
 
@@ -732,14 +736,11 @@ default:
 					 	newColor = (COLOR_LIST*) malloc(sizeof(COLOR_LIST));
 						newColor->color = nextItem->color;
 						newColor->valid = 5;
-						newColor->next = nextItem->next;
+						newColor->next = NULL;
 
 						item->next = newColor;
 
-						item = newColor;
-
-						//if has more members add them too
-						if ( NULL == lastItem->next ) { break; }
+						item = item->next;
 
 						lastItem = lastItem->next;
 					}
@@ -806,6 +807,7 @@ default:
 	printDebug(SHOW_TEST,"Wrote of size: %d of %d\n", outCounter, imageSize);
 
 // Print global/local color table	
+#ifdef SHOW_TABLE
 	printDebug(SHOW_TABLE,"\n");
 
 	if ( hasGlobalTable ) {
@@ -837,6 +839,7 @@ default:
 
 		printDebug(SHOW_TABLE,"\n");
 	}
+#endif
 
 //////////////////////////////
 // Create BMP file
@@ -856,6 +859,10 @@ default:
 	//auxiliary
 	BYTE padding = 0;	//any value is possible
 	int padding_count;
+	int tmp;
+#if SHOW_OUT_DATA
+	int tmp_show;
+#endif
 
 //////////////////////////////
 // Write BMP file
@@ -895,9 +902,6 @@ default:
 	fwrite(&bfh, sizeof(BITMAPFILEHEADER), 1, outputFile);
 	fwrite(&bih, sizeof(BITMAPINFOHEADER), 1, outputFile);
 
-	printDebug(0,"%d %d %d\n%d %d %d %d %d\n", sizeof(BITMAPINFOHEADER), sizeof(BITMAPFILEHEADER), sizeof(COLORREF_RGB),
-											sizeof(UINT), sizeof(DWORD), sizeof(LONG), sizeof(WORD), sizeof(BYTE));
-
 	printDebug(SHOW_OUT_DATA, "Image: %d x %d -> %d\n", imageWidth, imageHeight, imageWidth * imageHeight);
 
 //********************************************************
@@ -908,18 +912,28 @@ default:
 
 	for(i = 0; i < bih.biHeight; i++)
 	{
+		
+#if SHOW_OUT_DATA
+		tmp_show = i * bih.biWidth;
+#endif
+
+		tmp = ( bih.biHeight - 1 - i ) * bih.biWidth;
+
 		//Write a pixel to outputFile
 		for(j = 0; j < bih.biWidth; j++)
 		{
-			currRGB = &(colorBMP[i*bih.biWidth+j]);
+
+#if SHOW_OUT_DATA
+			currRGB = &(colorBMP[tmp_show+j]);
 
 			printDebug(SHOW_OUT_DATA,"\x1b[48;2;%d;%d;%dm""  ""\x1b[0m",
 				currRGB->cRed, currRGB->cGreen, currRGB->cBlue);
 
 		//	printDebug(SHOW_OUT_DATA,"%2X;%2X;%2X ",
 		//		currRGB->cRed, currRGB->cGreen, currRGB->cBlue);
+#endif
 
-			currRGB = &(colorBMP[(bih.biHeight-1-i)*bih.biWidth+j]);
+			currRGB = &(colorBMP[tmp+j]);
 
 			fwrite(&currRGB->cBlue, sizeof(BYTE), 1, outputFile);
 			fwrite(&currRGB->cGreen, sizeof(BYTE), 1, outputFile);
@@ -942,23 +956,21 @@ default:
 //	Deallocation section
 //********************************************************
 
-	if ( hasGlobalTable || hasLocalTable ) {
-		for (i = 0; i < maxOfTable; ++i) {
-			item = colorTable[i];
+	for (i = 0; i < maxOfTable; ++i) {
+		item = colorTable[i];
 
-			//each member must be freed
-			while ( NULL != item->next ) {
-				currItem = item;
-				item = currItem->next;
-				free(currItem);
-				if ( NULL == item->next) { break; }
-			}
-
-			free(item);
+		//each member must be freed
+		while ( NULL != item->next ) {
+			currItem = item;
+			item = currItem->next;
+			free(currItem);
+			if ( NULL == item->next) { break; }
 		}
 
-		free(colorTable);
+		free(item);
 	}
+
+	free(colorTable);
 
 	free(gifData);
 	free(colorBMP);

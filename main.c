@@ -4,7 +4,7 @@
 //* * *                                               * * *//
 //* * *                Jakub Pastuszek                * * *//
 //* * *           xpastu00@stud.fit.vutbr.cz          * * *//
-//* * *                  brezen 2018                  * * *//
+//* * *                  april 2018                   * * *//
 //*********************************************************//
 
 #define _POSIX_C_SOURCE 2
@@ -92,6 +92,7 @@ int main(int argc, char *argv[]) {
 		} 
 	}
 
+	//convert file
 	ret = gif2bmp(&record, fp_i, fp_o);
 
 	if ( NULL != inputFile && fclose(fp_i) ) {
@@ -102,14 +103,15 @@ int main(int argc, char *argv[]) {
 		fprintf(stderr, "Error: closing %s file\n", outputFile);
 	}
 
+	//remove output file if error during convertion
 	if ( -1 == ret && NULL != outputFile ) {
 		ret = remove(outputFile);
 	}
 
 	if ( NULL != logFile ) {
 		fprintf(fp_l, "login = xpastu00\n");
-		fprintf(fp_l, "uncodedSize = %ld\n", record.gifSize);	//v bytech
-		fprintf(fp_l, "codedSize = %ld\n", record.bmpSize);		//v bytech
+		fprintf(fp_l, "uncodedSize = %ld\n", record.gifSize);	//in bytes
+		fprintf(fp_l, "codedSize = %ld\n", record.bmpSize);		//in bytes
 
 		if ( fclose(fp_l) ) {
 			fprintf(stderr, "Error: closing %s file\n", logFile);
@@ -121,7 +123,7 @@ int main(int argc, char *argv[]) {
 
 //Print help message with usage
 void printHelpMessage() {
-    printf("Usage: gif2bmp -i <input_file> -o <output_file>\n" \
+    printf("Usage: gif2bmp [ -h ] [ -i <input_file> ] [ -o <output_file> ] [ -l <log_file> ]\n" \
            "\t-i <file>\tinput *.gif file (default value: stdin)\n" \
            "\t-o <file>\toutput *.bmp file (default value: stdout)\n" \
 		   "\t-l <file>\tlog file\n" \

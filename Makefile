@@ -17,7 +17,7 @@ $(PROG_NAME):
 	$(CC) $(CFLAGS) $(SOURCE) -o $@ -lm
 
 debug:
-	$(CC) -ggdb3 $(SOURCE) -o $(DEBUG_NAME)
+	$(CC) -ggdb3 $(SOURCE) -o $(DEBUG_NAME) -lm
 
 test:
 	./$(PROG_NAME) -i ./test/easy.gif -o test.bmp 
