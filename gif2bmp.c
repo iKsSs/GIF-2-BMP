@@ -238,12 +238,6 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 	}
 	printDebug(SHOW_HEADER,"Color resolution: %d bits/pixel\n", colorResolution+1);
 
-	//not 8 bit per color
-	if ( 7 != colorResolution ) {
-		fprintf(stderr, "Unsupported color resolution\n");
-		return -1;
-	}
-
 //********************************************************
 //	Global Color Table section
 //********************************************************
