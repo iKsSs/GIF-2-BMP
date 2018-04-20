@@ -121,8 +121,25 @@ WORD get_n_bits(BYTE *data, BYTE size, int count) {
 	return ret;
 }
 
-//Function to convert GIF file to BMP file
-//params	gif2bmp	
+//Change row interlaced of image (array) - copy row from "from" array to "to" array
+//params	to			image (array) to copy to
+//			from		image (array) to copy from
+//			rowTo		row of image to copy to
+//			rowFrom		row of image to copy from
+//			width		width of image
+//return	void
+void change_row_interlaced(COLORREF_RGB *to, COLORREF_RGB *from, WORD rowTo, WORD rowFrom, WORD width) {
+	//calculate row start positions
+	rowTo *= width; 
+	rowFrom *= width; 
+
+	for (int i = 0; i < width; ++i) {
+		to[rowTo+i] = from[rowFrom+i];
+	}
+}
+
+//Convert GIF file to BMP file
+//params	gif2bmp		struct of GIF and BMP file sizes
 //			inputFile	file descriptor to input GIF file
 //			outputFile	file descriptor to output BMP file
 //return	int			(un)successful conversion
@@ -754,6 +771,30 @@ default:
 				colorBMP[outCounter++] = currItem->color;	//first color is only printed out
 			}
 		}
+	}
+
+	if ( interlaced ) {
+		COLORREF_RGB *colorTmp = colorBMP;
+		COLORREF_RGB *newColorBMP = (COLORREF_RGB *) malloc(sizeof(COLORREF_RGB) * imageSize);
+
+		if ( NULL == newColorBMP ) {
+			fprintf(stderr, "Error when allocation New Color BMP Table\n");
+			return -1;
+		}
+
+		j = 0;
+		for (i = 0; i < imageHeight; i += 8, j++)  /* Interlace Pass 1 */
+			 change_row_interlaced(newColorBMP, colorBMP, i, j, imageWidth);
+		for (i = 4; i < imageHeight; i += 8, j++)  /* Interlace Pass 2 */
+			 change_row_interlaced(newColorBMP, colorBMP, i, j, imageWidth);
+		for (i = 2; i < imageHeight; i += 4, j++)  /* Interlace Pass 3 */
+			 change_row_interlaced(newColorBMP, colorBMP, i, j, imageWidth);
+		for (i = 1; i < imageHeight; i += 2, j++)  /* Interlace Pass 4 */
+			 change_row_interlaced(newColorBMP, colorBMP, i, j, imageWidth);
+
+		colorBMP = newColorBMP;
+
+		free(colorTmp);
 	}
 
 	printDebug(SHOW_TEST,"Wrote of size: %d of %d\n", outCounter, imageSize);

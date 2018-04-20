@@ -134,11 +134,7 @@ void toLittleEndian(const long long int size, void *value);
 BYTE reverse_byte_binary(BYTE in);
 WORD reverse_word_binary(WORD in);
 WORD get_n_bits(BYTE *data, BYTE size, int count);
-
-/* gif2bmp – záznam o převodu
-inputFile – vstupní soubor (GIF)
-outputFile – výstupní soubor (BMP)
-návratová hodnota – 0 převod proběhl v pořádku, -1 při převodu došlo k chybě, příp. nepodporuje daný formát GIF */
+void change_row_interlaced(COLORREF_RGB *to, COLORREF_RGB *from, WORD rowTo, WORD rowFrom, WORD width);
 int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile);
 
 #endif
