@@ -206,6 +206,7 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 	BYTE Bnull;
 	WORD Wnull;
 	DWORD Dnull;
+	int64_t readB = 0;
 
 //////////////////////////////
 // Read GIF file
@@ -215,13 +216,13 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 //	Header section
 //********************************************************
 
-	fread(&head_pre, sizeof(DWORD), 1, inputFile);
-	fread(&head_post, sizeof(WORD), 1, inputFile);
+	readB += fread(&head_pre, sizeof(DWORD), 1, inputFile);
+	readB += fread(&head_post, sizeof(WORD), 1, inputFile);
 	
 	toLittleEndian(4, &head_pre);
 	toLittleEndian(2, &head_post);
 
-	printDebug(SHOW_HEADER,"Head (47494638 3961): %X %X\n",head_pre,head_post);
+	printDebug(SHOW_HEADER,"Head (47494638 3961): %2X %2X\n",head_pre,head_post);
 
 	if ( head_pre != 0x47494638 //dec: GIF8
 			|| !( head_post == 0x3961 || head_post == 0x3761 ) ) { //dec: 9a, 7a
@@ -229,16 +230,16 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 		return -1;
 	}
 	
-	fread(&canvasWidth, sizeof(WORD), 1, inputFile);	//canvas width
-	fread(&canvasHeight, sizeof(WORD), 1, inputFile);	//canvas height
+	readB += fread(&canvasWidth, sizeof(WORD), 1, inputFile);	//canvas width
+	readB += fread(&canvasHeight, sizeof(WORD), 1, inputFile);	//canvas height
 	
 //********************************************************
 //	Logical Screen Descriptor section
 //********************************************************
 
-	fread(&GCT, sizeof(BYTE), 1, inputFile);	//Global Color Table specification
-	fread(&back_color, sizeof(BYTE), 1, inputFile);
-	fread(&pixel_ratio, sizeof(BYTE), 1, inputFile);
+	readB += fread(&GCT, sizeof(BYTE), 1, inputFile);	//Global Color Table specification
+	readB += fread(&back_color, sizeof(BYTE), 1, inputFile);
+	readB += fread(&pixel_ratio, sizeof(BYTE), 1, inputFile);
 
 	hasGlobalTable		= (0x80 & GCT) >> 7;
 	colorResolution		= (0x70 & GCT) >> 4;
@@ -246,7 +247,7 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 	sizeOfGlobalTable	= hasGlobalTable ? pow (2, (0x07 & GCT) + 1 ) : 0;
 
 	printDebug(SHOW_HEADER,"CanvasW\tCanvasH\tGCT\t\tback_color\tpixel_ratio\n");
-	printDebug(SHOW_HEADER,"%d (%X)\t%d (%X)\t%X - "BYTE_TO_BINARY_PATTERN"\t%d (%X)\t\t%d (%X)\n",
+	printDebug(SHOW_HEADER,"%d (%2X)\t%d (%2X)\t%2X - "BYTE_TO_BINARY_PATTERN"\t%d (%2X)\t\t%d (%2X)\n",
 		canvasWidth,canvasWidth,canvasHeight,canvasHeight,GCT,BYTE_TO_BINARY(GCT),back_color,back_color,pixel_ratio,pixel_ratio);
 	if ( hasGlobalTable ) {
 		printDebug(SHOW_HEADER,"Size of global table: %d (%d)\n",sizeOfGlobalTable, sortOfGlobalTable);
@@ -286,14 +287,14 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 
 		for (i = 0; i < sizeOfGlobalTable; ++i) {
 			//Read color table
-			fread(&color.cRed, sizeof(BYTE), 1, inputFile);
-			fread(&color.cGreen, sizeof(BYTE), 1, inputFile);
-			fread(&color.cBlue, sizeof(BYTE), 1, inputFile);
+			readB += fread(&color.cRed, sizeof(BYTE), 1, inputFile);
+			readB += fread(&color.cGreen, sizeof(BYTE), 1, inputFile);
+			readB += fread(&color.cBlue, sizeof(BYTE), 1, inputFile);
 
 			colorTable[i]->color = color;
 			colorTable[i]->valid = 1;
 
-			printDebug(SHOW_RGB_TABLE,"%2X\t%X\t%X\t%X\n",
+			printDebug(SHOW_RGB_TABLE,"%2X\t%2X\t%2X\t%2X\n",
 				order++,color.cRed,color.cGreen,color.cBlue);
 		}
 
@@ -318,38 +319,38 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 
 	do {
 		//read start of any block
-		fread(&extension, sizeof(BYTE), 1, inputFile);
+		readB += fread(&extension, sizeof(BYTE), 1, inputFile);
 
 		switch (extension) {
 case 0x21:
 
 	//read exact extension type
-	fread(&ext_type, sizeof(BYTE), 1, inputFile);
+	readB += fread(&ext_type, sizeof(BYTE), 1, inputFile);
 
 	if ( 0xF9 == ext_type ) {
 //********************************************************
 //	Graphics Control Extension section
 //********************************************************
 		
-		fread(&size, sizeof(BYTE), 1, inputFile);	// have to be 0x04
+		readB += fread(&size, sizeof(BYTE), 1, inputFile);	// have to be 0x04
 
 		printDebug(SHOW_EXT,"------------------\n");
-		printDebug(SHOW_EXT,"GCE (21F9): %X%X\n", extension, ext_type);
+		printDebug(SHOW_EXT,"GCE (21F9): %2X%2X\n", extension, ext_type);
 
 		//more GCE block in file -> ignore
 		if ( gce_loaded ) {
-			fread(&Bnull, sizeof(BYTE), 1, inputFile);
-			fread(&Wnull, sizeof(WORD), 1, inputFile);
-			fread(&Bnull, sizeof(BYTE), 1, inputFile);
-			fread(&Bnull, sizeof(BYTE), 1, inputFile);
+			readB += fread(&Bnull, sizeof(BYTE), 1, inputFile);
+			readB += fread(&Wnull, sizeof(WORD), 1, inputFile);
+			readB += fread(&Bnull, sizeof(BYTE), 1, inputFile);
+			readB += fread(&Bnull, sizeof(BYTE), 1, inputFile);
 		} else {
-			fread(&transparency, sizeof(BYTE), 1, inputFile);
-			fread(&delay, sizeof(WORD), 1, inputFile);
-			fread(&transparentColor, sizeof(BYTE), 1, inputFile);
-			fread(&endOfBlock, sizeof(BYTE), 1, inputFile);
+			readB += fread(&transparency, sizeof(BYTE), 1, inputFile);
+			readB += fread(&delay, sizeof(WORD), 1, inputFile);
+			readB += fread(&transparentColor, sizeof(BYTE), 1, inputFile);
+			readB += fread(&endOfBlock, sizeof(BYTE), 1, inputFile);
 
 			printDebug(SHOW_EXT,"size\ttransp.\tdelay\ttransp_col\tEOB\n");
-			printDebug(SHOW_EXT,"%d (%X)\t%d (%X)\t%d (%X)\t%d (%X)\t%d (%X)\n",
+			printDebug(SHOW_EXT,"%d (%2X)\t%d (%2X)\t%d (%2X)\t%d (%2X)\t%d (%2X)\n",
 					size,size,transparency,transparency,delay,delay,transparentColor,transparentColor,endOfBlock,endOfBlock);
 
 			gce_loaded = 1;
@@ -361,14 +362,14 @@ case 0x21:
 //********************************************************
 
 		printDebug(SHOW_EXT,"------------------\n");
-		printDebug(SHOW_EXT,"Plain text/Comment/Application (21{01,FE,FF}): %X%X\n", extension, ext_type);
+		printDebug(SHOW_EXT,"Plain text/Comment/Application (21{01,FE,FF}): %2X%2X\n", extension, ext_type);
 
 		//ignore this types of extension -> must be readed and ignored in debug printed out
 		do {
-			fread(&length, sizeof(BYTE), 1, inputFile);
+			readB += fread(&length, sizeof(BYTE), 1, inputFile);
 
 			for (i = 0; i < length; ++i) {
-				fread(&c, sizeof(BYTE), 1, inputFile);
+				readB += fread(&c, sizeof(BYTE), 1, inputFile);
 				printDebug(SHOW_EXT,"%c", c);
 			}
 		} while (length);
@@ -386,23 +387,24 @@ case 0x2C:
 	if ( img_loaded ) {
 		printDebug(SHOW_IMG_DESC,"%d image within GIF file\n", img_loaded++);
 
-		fread(&Dnull, sizeof(DWORD), 1, inputFile);
-		fread(&Dnull, sizeof(DWORD), 1, inputFile);
-		fread(&localAux, sizeof(BYTE), 1, inputFile);
+		readB += fread(&Dnull, sizeof(DWORD), 1, inputFile);
+		readB += fread(&Dnull, sizeof(DWORD), 1, inputFile);
+		readB += fread(&localAux, sizeof(BYTE), 1, inputFile);
 
 		sizeAux	= ((0x80 & localAux) >> 7) ? pow (2, (0x07 & localAux) + 1 ) : 0;
 		if ( ((0x80 & localAux) >> 7) ) {
 			for (i = 0; i < sizeAux; ++i) {
-				fread(&Bnull, sizeof(BYTE), 1, inputFile);
-				fread(&Bnull, sizeof(BYTE), 1, inputFile);
-				fread(&Bnull, sizeof(BYTE), 1, inputFile);
+				readB += fread(&Bnull, sizeof(BYTE), 1, inputFile);
+				readB += fread(&Bnull, sizeof(BYTE), 1, inputFile);
+				readB += fread(&Bnull, sizeof(BYTE), 1, inputFile);
 			}
 		}
 
-		fread(&Bnull, sizeof(BYTE), 1, inputFile);
+		readB += fread(&Bnull, sizeof(BYTE), 1, inputFile);
 
 		do {
-			fread(&Bnull, sizeof(BYTE), 1, inputFile);
+			readB += fread(&Bnull, sizeof(BYTE), 1, inputFile);
+			readB += Bnull;
 			fseek( inputFile, ftell(inputFile)+Bnull, SEEK_SET );	//shift file pointer position
 		} while ( 0x00 != Bnull );
 
@@ -412,19 +414,19 @@ case 0x2C:
 	img_loaded = 1;
 
 	printDebug(SHOW_IMG_DESC,"------------------\n");
-	printDebug(SHOW_IMG_DESC,"ImageDesc (2C): %X\n",extension);
+	printDebug(SHOW_IMG_DESC,"ImageDesc (2C): %2X\n",extension);
 	
-	fread(&NWCorner, sizeof(DWORD), 1, inputFile);
-	fread(&imageWidth, sizeof(WORD), 1, inputFile);
-	fread(&imageHeight, sizeof(WORD), 1, inputFile);
-	fread(&localColorTable, sizeof(BYTE), 1, inputFile);
+	readB += fread(&NWCorner, sizeof(DWORD), 1, inputFile);
+	readB += fread(&imageWidth, sizeof(WORD), 1, inputFile);
+	readB += fread(&imageHeight, sizeof(WORD), 1, inputFile);
+	readB += fread(&localColorTable, sizeof(BYTE), 1, inputFile);
 
 	hasLocalTable 		= (0x80 & localColorTable) >> 7;
 	sizeOfLocalTable	= hasLocalTable ? pow (2, (0x07 & localColorTable) + 1 ) : 0;
 	interlaced			= (0x40 & localColorTable) >> 6;
 
 	printDebug(SHOW_IMG_DESC,"NWcor\timgW\timgH\tlocalColorTable\tlocalTable\tsizeOfLocalTable\tinterlaced\n");
-	printDebug(SHOW_IMG_DESC,"%d (%X)\t%d (%X)\t%d (%X)\t%X - "BYTE_TO_BINARY_PATTERN"\t%d\t%d\t%d\n",
+	printDebug(SHOW_IMG_DESC,"%d (%2X)\t%d (%2X)\t%d (%2X)\t%2X - "BYTE_TO_BINARY_PATTERN"\t%d\t%d\t%d\n",
 		NWCorner,NWCorner,imageWidth,imageWidth,imageHeight,imageHeight,
 		localColorTable,BYTE_TO_BINARY(localColorTable),hasLocalTable,sizeOfLocalTable,interlaced);
 
@@ -457,14 +459,14 @@ case 0x2C:
 
 		for (i = 0; i < sizeOfLocalTable; ++i) {
 			//Read color table
-			fread(&color.cRed, sizeof(BYTE), 1, inputFile);
-			fread(&color.cGreen, sizeof(BYTE), 1, inputFile);
-			fread(&color.cBlue, sizeof(BYTE), 1, inputFile);
+			readB += fread(&color.cRed, sizeof(BYTE), 1, inputFile);
+			readB += fread(&color.cGreen, sizeof(BYTE), 1, inputFile);
+			readB += fread(&color.cBlue, sizeof(BYTE), 1, inputFile);
 
 			colorTable[i]->color = color;
 			colorTable[i]->valid = 1;
 
-			printDebug(SHOW_RGB_TABLE,"%2X\t%X\t%X\t%X\n",
+			printDebug(SHOW_RGB_TABLE,"%2X\t%2X\t%2X\t%2X\n",
 				order++,color.cRed,color.cGreen,color.cBlue);
 		}
 
@@ -484,11 +486,11 @@ case 0x2C:
 //	Image Data section
 //********************************************************
 	
-	fread(&LZWMinSize, sizeof(BYTE), 1, inputFile);
+	readB += fread(&LZWMinSize, sizeof(BYTE), 1, inputFile);
 
 	printDebug(SHOW_DATA_SIZE,"------------------\n");
 	printDebug(SHOW_DATA_SIZE,"Start of Image - LZW min code size:\n");
-	printDebug(SHOW_DATA_SIZE,"%d (%X)\n",LZWMinSize,LZWMinSize);
+	printDebug(SHOW_DATA_SIZE,"%d (%2X)\n",LZWMinSize,LZWMinSize);
 
 	sumOfData = 0;
 
@@ -522,21 +524,21 @@ case 0x2C:
 	first = 1;
 
 	do {
-		fread(&bytesOfEncData, sizeof(BYTE), 1, inputFile);
+		readB += fread(&bytesOfEncData, sizeof(BYTE), 1, inputFile);
 		
 		printDebug(SHOW_DATA && SHOW_DATA_SIZE,"Bytes of enc data\n");
-		printDebug(SHOW_DATA && SHOW_DATA_SIZE,"%d (%X)\n",bytesOfEncData,bytesOfEncData);
+		printDebug(SHOW_DATA && SHOW_DATA_SIZE,"%d (%2X)\n",bytesOfEncData,bytesOfEncData);
 		
 		if ( first ) {
 			printDebug(!SHOW_DATA && SHOW_DATA_SIZE,"Bytes of enc data\n");
-			printDebug(!SHOW_DATA && SHOW_DATA_SIZE,"%d (%X)",bytesOfEncData,bytesOfEncData);
+			printDebug(!SHOW_DATA && SHOW_DATA_SIZE,"%d (%2X)",bytesOfEncData,bytesOfEncData);
 			first = 0;
 		} else {
-			printDebug(!SHOW_DATA && SHOW_DATA_SIZE,", %d (%X)",bytesOfEncData,bytesOfEncData);
+			printDebug(!SHOW_DATA && SHOW_DATA_SIZE,", %d (%2X)",bytesOfEncData,bytesOfEncData);
 		}
 
 		for (i = 0; i < bytesOfEncData; i++) {
-			fread(&code, sizeof(BYTE), 1, inputFile);
+			readB += fread(&code, sizeof(BYTE), 1, inputFile);
 			
 			//add byte in reversed order -> LSB on the left
 			gifData[dataCounter++] = reverse_byte_binary(code);
@@ -565,7 +567,7 @@ case 0x3B:
 //	Trailer section
 //********************************************************
 	
-	printDebug(SHOW_END,"Term (3B): %X\n",extension);
+	printDebug(SHOW_END,"Term (3B): %2X\n",extension);
 
 break;
 
@@ -576,11 +578,15 @@ default:
 		}
 	} while ( !end_of_exts );
 
+	if ( stdin != inputFile ) {
+		gif2bmp->gifSize = readB;
+	} else {
 //Get file size using standard library
 //URL: https://stackoverflow.com/questions/238603/how-can-i-get-a-files-size-in-c
 //Author: Greg Hewgill on 26 Oct 2008
-	fseek(inputFile, 0, SEEK_END); // seek to end of file
-	gif2bmp->gifSize = ftell(inputFile); // get current file pointer
+		fseek(inputFile, 0, SEEK_END); // seek to end of file
+		gif2bmp->gifSize = ftell(inputFile); // get current file pointer
+	}
 
 //********************************************************
 //	Create Table section
