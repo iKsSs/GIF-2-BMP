@@ -4,29 +4,38 @@
 //* * *                                               * * *//
 //* * *                Jakub Pastuszek                * * *//
 //* * *           xpastu00@stud.fit.vutbr.cz          * * *//
-//* * *                  brezen 2018                  * * *//
+//* * *                  april 2018                  * * *//
 //*********************************************************//
 
 #include "gif2bmp.h"
+
+//////////////////////////////
+// Some color definitions
+//////////////////////////////
 
 COLORREF_RGB white = {0xFF,0xFF,0xFF};
 COLORREF_RGB black = {0x00,0x00,0x00};
 
 COLORREF_RGB junk = {0xEE,0x33,0x99};
 
-//URL: http://blog.acipo.com/handling-endianness-in-c/
-//Author: Andrew Ippoliti on 23 Nov 2013
-
-//Check if system is in Big endian
-//return	int		1 - is Big endian | 0 - is Little endian
-int isBigEndian() {
-    int test = 1;
-    char *p = (char*)&test;
-
-    return p[0] == 0;
+//Write debug messages conditioned by define constants
+//works as standard printf with 1st param if output be visible
+//URL: https://stackoverflow.com/questions/21758136/write-debug-messages-in-c-to-a-file
+//Author: unwind on 13 Feb 2014
+inline void printDebug(const int show, const char *fmt, ...) {
+	if ( show ) {
+		va_list args;
+		va_start(args, fmt);
+	#ifdef DEBUG
+		vfprintf(stdout,fmt, args);
+	#endif
+		va_end(args);
+	}
 }
 
 //Converts Big endian number to Little endian
+//URL: http://blog.acipo.com/handling-endianness-in-c/
+//Author: Andrew Ippoliti on 23 Nov 2013
 //params	size	size of number in bytes
 //			value	reference to the number
 //return	void
@@ -40,21 +49,6 @@ void toLittleEndian(const long long int size, void *value) {
 	for (i = 0; i < size; ++i) {
         ((char*)value)[i] = result[i];
     }
-}
-
-//Write debug messages conditioned by define constants
-//works as standard printf with 1st param if output be visible
-//URL: https://stackoverflow.com/questions/21758136/write-debug-messages-in-c-to-a-file
-//Author: unwind on 13 Feb 2014
-inline void printDebug(const int show, const char *fmt, ...) {
-#ifdef DEBUG
-	if ( show ) {
-		va_list args;
-		va_start(args, fmt);
-		vfprintf(stdout,fmt, args);
-		va_end(args);
-	}	
-#endif
 }
 
 //Reverse bit order in BYTE

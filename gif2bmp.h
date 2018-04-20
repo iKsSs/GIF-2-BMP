@@ -4,7 +4,7 @@
 //* * *                                               * * *//
 //* * *                Jakub Pastuszek                * * *//
 //* * *           xpastu00@stud.fit.vutbr.cz          * * *//
-//* * *                  brezen 2018                  * * *//
+//* * *                  april 2018                  * * *//
 //*********************************************************//
 
 #ifndef GIF2BMP_H
@@ -18,6 +18,10 @@
 
 #include <math.h>
 
+//////////////////////////////
+// Defintions
+//////////////////////////////
+
 #define BI_RGB 0
 
 #define MAX_LZW_SIZE 12
@@ -25,7 +29,7 @@
 
 #define BYTE_SIZE_IN_BITS 8
 
-#define DEBUG
+//#define DEBUG
 
 #define SHOW_TEST 1
 
@@ -35,15 +39,13 @@
 #define SHOW_RGB_TABLE 0
 #define SHOW_EXT 1
 #define SHOW_IMG_DESC 1
-#define SHOW_DATA_SIZE 1
+#define SHOW_DATA_SIZE 0
 #define SHOW_DATA 0
-#define SHOW_DATA_DETAIL 1
+#define SHOW_DATA_DETAIL 0
 #define SHOW_END 1
 #define SHOW_TABLE 0
 
 #define SHOW_OUT_DATA 0
-
-extern void printDebug(const int show, const char *fmt, ...);
 
 //Print binary format in printf
 //URL: https://stackoverflow.com/questions/111928/is-there-a-printf-converter-to-print-in-binary-format
@@ -59,11 +61,19 @@ extern void printDebug(const int show, const char *fmt, ...);
   (byte & 0x02 ? '1' : '0'), \
   (byte & 0x01 ? '1' : '0') 
 
+//////////////////////////////
+// Type definitions
+//////////////////////////////
+
 typedef uint16_t UINT;	// 2 B
 typedef uint32_t DWORD; // 4 B
 typedef int32_t LONG;   // 4 B
 typedef uint16_t WORD;  // 2 B
 typedef uint8_t BYTE;   // 1 B
+
+//////////////////////////////
+// Data structures
+//////////////////////////////
 
 //Hack to repair incorrect field sizes
 //URL: https://stackoverflow.com/questions/27215610/creating-bmp-file-in-c
@@ -113,12 +123,17 @@ typedef struct COLOR_LIST
 typedef struct{
 	int64_t bmpSize;
 	int64_t gifSize;
-	//int64_t long gifSize;
 } tGIF2BMP;
 
-int isBigEndian();
+//////////////////////////////
+// Functions
+//////////////////////////////
 
+extern void printDebug(const int show, const char *fmt, ...);
 void toLittleEndian(const long long int size, void *value);
+BYTE reverse_byte_binary(BYTE in);
+WORD reverse_word_binary(WORD in);
+WORD get_n_bits(BYTE *data, BYTE size, int count);
 
 /* gif2bmp – záznam o převodu
 inputFile – vstupní soubor (GIF)
