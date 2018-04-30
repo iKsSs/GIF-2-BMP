@@ -689,7 +689,7 @@ default:
 						}
 						nextItem = currItem->next;						
 						free(currItem);
-					} while ( NULL != nextItem->next );
+					} while ( NULL != nextItem );
 				}
 
 				item->color = white;
@@ -722,7 +722,6 @@ default:
 							outCounter++;
 						}
 						//has more members?
-				 		if ( NULL == item->next ) { break; }
 				 		item = item->next;
 				 	} while ( NULL != item );
 				}
@@ -770,7 +769,6 @@ default:
 				 		//output color (with all members)
 						colorBMP[outCounter++] = item->color;
 						//has more members?
-						if ( NULL == item->next ) { break; }
 				 		item = item->next;
 				 	} while ( NULL != item );
 				}
