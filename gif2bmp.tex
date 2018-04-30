@@ -1,0 +1,144 @@
+\documentclass[a4paper,12pt,times]{article}
+
+\usepackage[left=2.5cm,text={16cm,24cm},top=2.5cm]{geometry}
+\usepackage{lmodern}
+\usepackage[T1]{fontenc} % Use 8-bit encoding that has 256 glyphs
+\usepackage[utf8]{inputenc}
+\usepackage[czech]{babel}
+
+\usepackage{datetime}
+\usepackage{graphicx}
+\usepackage{color}
+\usepackage[unicode,colorlinks,hyperindex,plainpages=false,pdftex,urlcolor=black,linkcolor=black,citecolor=black]{hyperref}
+
+\bibliographystyle{alpha}
+\bibliography{citace}
+
+\graphicspath{{./graphics/}}
+
+% https://tex.stackexchange.com/questions/31301/how-to-reduce-the-number-of-hyphenation
+\pretolerance=5000
+\tolerance=9000
+\emergencystretch=0pt
+\righthyphenmin=4
+\lefthyphenmin=4
+
+\begin{document}
+
+% ======================================
+% Title page
+% ======================================
+
+\pagestyle{empty}
+
+\begin{titlepage}
+ %centered bolder font
+{\bfseries{\centering
+
+	\vspace*{\stretch{0.12}}
+
+	\begin{figure}[h!]
+		\centering
+		\scalebox{0.15}{\includegraphics[]{FIT_logo.png}}
+	\end{figure}
+	
+	\vspace{\stretch{0.16}}
+	
+	\Large
+	Kódování a komprese dat\\
+	\Huge
+	Projekt č. 3\\
+	\LARGE
+	Konverze obrazového formátu GIF na BMP\\
+
+	\vspace{\stretch{0.07}}
+
+	\large
+	\today\par
+}}
+
+	\vspace{\stretch{0.65}}
+	
+	\Large
+	\noindent
+	Jakub Pastuszek, xpastu00@stud.fit.vutbr.cz\\
+	Fakulta Informačních Technologií\\
+	Vysoké Učení Technické v Brně
+
+\end{titlepage}
+
+\pagestyle{plain}
+\setcounter{page}{1}
+
+% ======================================
+% Document content
+% ======================================
+
+\section{Úvod}
+
+Implementace knihovny a aplikace v jazyce C pro převod souboru grafického formátu GIF (Graphics Interchange Format) na soubor grafického formátu BMP (Microsoft Windows Bitmap). Soubory ve formátu GIF jsou zakódovány pomocí metody LZW. Výstupní soubor ve formátu BMP pak musí být možné zobrazit běžným prohlížečem obrázků (např. Irfan View).
+
+\section{Popis implementace}
+
+\subsection{Implementace knihovny}
+Rozhraní knihovny definuje prototyp funkce pro konverzi GIF \cite{GIF} (87a i 89a) na BMP. Dále je definován záznam udávající velikost souboru GIF a BMP v bytech. Knihovna umí převádět statický i animovaný 1 -- 8 bitový formát GIF. Výstupní grafický soubor BMP neobsahuje komprimaci RLE. Z důvodu přenositelnosti jsou místo standardních datových typů použity předdefinované \textit{int8\_t}, \textit{u\_int32\_t} apod., definované v knihovně \textit{sys/types.h}.
+
+\subsection{Implementace aplikace}
+Aplikace se jmenuje \textit{gif2bmp} a využívá implementované knihovny pro převod grafického formátu GIF na BMP s využitím kompresní metody LZW. Podporované parametry příkazového řádku jsou vypsány v kapitole~\ref{sec:spusteni}. Zpracování parametrů příkazové řádky je prováděno pomocí funkce getopt definované v knihovně \textit{unistd.h}. Výstupní zpráva (dále logovací soubor) obsahuje login a původní velikost souboru GIF a novou velikost souboru BMP, obě hodnoty jsou v bytech.
+
+\subsection{Prostředí}
+Knihovna a aplikace jsou přeložitelné na školním serveru Merlin, a to v aktuální verzi kompilátoru GCC na daném serveru. Překlad je zajištěn pomocí souboru \textit{Makefile}. Provedení překladu je iniciováno zadáním příkazu make do příkazové řádky.
+
+\subsection{Popis algoritmu}
+Hlavní převodní funkce dostane na vstupu již připravené souborové deskriptory, jak vstupního, tak i výstupního souboru. Nejprve se čte vstupní GIF soubor a postupně se provádí syntaktická analýza. Soubor na začátku musí obsahovat hlavičku (dekadicky „\textit{GIF87a}“ nebo „\textit{GIF89a}“). Ihned za hlavičkou následují rozměry plátna a logický obrazový deskriptor, který mj. obsahuje metadata o globální tabulce barev, barevném rozlišení a barvu pozadí. V případě že metadata udávají, že soubor obsahuje globální tabulku barev, tak dále následuje právě zmíněná tabulka. V logickém obrazovém deskriptoru je zapsaná také velikost této tabulky. Každá položka tabulky obsahuje tři hodnoty (barvy) a to: červenou, zelenou a modrou – každou uloženou na~samostatném bytu.
+
+Za povinnou hlavičkou následují volitelná rozšíření \cite{whatsinagif}. Jedno z rozšíření je „\textit{Graphics control}“ (v překl. řízení grafiky), které obsahuje data o zpoždění přehrávání u animovaných GIF souborů a příznak průhlednosti s danou barvu, která má být v obrázku průhledná. Dalším z~možných rozšíření jsou „\textit{Plain text}“ a „\textit{Comment}“, které obsahují obyčejnou textovou informaci, která ale není v obrázku vypsána/vykreslena, proto pro převod do~BMP je redundantní. Obdobně to platí také pro rozšíření „\textit{Application}“, které slouží k~řízení animace GIF souboru.
+
+Další povinnou části vstupního GIF souboru je „\textit{Image descriptor}“ (v překl. obrazový deskriptor), který obsahuje informace o obrázku, který následuje bezprostředně za ním. Mezi tyto data patří šířka a výška obrázku, relativní umístění vzhledem k začátku plátna a v neposlední řadě informaci o lokální tabulce barev a prokládání. Informace o tom, jestliže za daným obrazovým deskriptorem následuje lokální tabulka je uložena v metadatech společně s její velikostí. Lokální tabulka má stejnou strukturu jako globální, ale v případě daného obrázku ji překrývá a používají se hodnoty z ní. Následující data jsou již kódové hodnoty, kde se ještě před nimi nachází hodnota minimální délky LZW kódu. Data jsou rozdělená do menších pod-bloků. Každý pod-blok před svým začátkem obsahuje byte udávající délku daného bloku. Z těchto informací se následně spočítá maximální počet možných kódů. Následně algoritmus pouze čte byty ze vstupu a ukládá je v~opačném pořadí do pole (viz kapitola~\ref{sec:pomocne_funkce}). Na konci souboru se musí nacházet hexadecimální hodnota „\textit{0x3B}“.
+
+Samotné dekódování \cite{lzw} a ukládání do výstupního pole pixelů probíhá souběžně. Nejprve je nutné znát správnou velikost výstupního obrázku, aby bylo možné alokovat prostor pro výstupní pole. Po alokaci je celé pole naplněno barvou pozadí (pro případ výskytu transparentního pixelu). Poté následuje smyčka, která načítá kódy. V této smyčce se nejdříve ověřuje, zda není potřeba zvětšit délku kódového slova (synchronizace s~kodérem). Dále je potřeba kontrolovat zaplnění tabulky barev, aby nepřetekla maximální možnou velikost 212 hodnot. V případě naplnění pokračujeme v dekódování bez přidávání nových záznamů do tabulky barev. Pokud se mezi načtenými kódy objeví „\textit{Clear}“ kód, obnoví se původní obsah tabulka barev a původní délka kódového slova. Jestliže je tabulka barev zaplněné, ale ještě nebylo dosaženo maximální kapacity, je její velikost zdvojnásobena. Ukončení načítání a dekódování značí „\textit{End Of Information}“ kód. Dále již následuje samotné dekódování a zápis do výstupního pole. První zakódovaná hodnota po kódu „\textit{Clear}“ se dekóduje a jen zapíše na výstup. Každá další dekódování pracuje s~aktuální dekódovanou hodnotou a hodnotou předcházející. Pokud je právě dekódovaná hodnota již v~tabulce barev je ihned zapsána na výstup a dále je přidána jako nová hodnota do tabulky barev společně s prvním indexem minulé hodnoty. V případě, že se daná hodnota v tabulce barev ještě nenachází, je vyrobená pouze z předešlé hodnoty a následně zapsána na výstup. Jestliže obrázek obsahuje prokládání, je po dekódování provedeno patřičné přehození řádků výstupu \cite{egff}, tak aby řádky následovaly po řadě za~sebou.
+
+Po fázi syntaktické analýzy vstupního GIF souboru následuje vytvoření výstupního BMP souboru. Tento výstupní soubor bude vždy mít 24 bitů na pixel bez komprese. Nejdříve se zapíše hlavička s určitými metadaty (výška a šířka obrázku, offset dat, ...) a následně data pixel po pixelu. Každý pixel je tvořen třemi barvami v jiném pořadí, než je tomu u souboru GIF, a to modrá, zelená a červená. Délka každého řádku dat BMP souboru musí být číslo dělitelné čtyřmi, proto pokud to nevychází, musí být řádek doplněn „vycpávkou“ a to v tomto případě v~podobě samých nul.
+	
+\subsection{Pomocné funkce}
+\label{sec:pomocne_funkce}
+Knihovna obsahuje definici \textit{SHOW\_*} hodnot pro možnost zobrazení kontrolních výpisů pomocí funkce \textit{printDebug()}, která funguje stejně jako standardní \textit{printf()}, ale je podmíněná právě definici dané SHOW\_* hodnoty. Pro snazší výpisy bitových hodnot je definován převod z bytu na bity funkcí \textit{BYTE\_TO\_BINARY()}. Další z pomocných funkcí je \textit{toLittleEndian()}, která převede číslo z Big-Endian na Little-Endian, který je použit jak u~GIF, tak BMP souboru.
+
+Mezi funkce důležité pro správnou funkčnost celého algoritmu a zárověň spjaté s LZW dekódováním patří \textit{reverse\_byte\_binary()} a \textit{reverse\_word\_binary()}, které mění pořadí bitů tak, aby LSB („least significant bit“ – nejméně významový bit) byl vlevo a MSB („most significant bit“ – nejvíce významová bit) vpravo. Toto přehození se hodí v případě uložení všech vstupních kódů do pole za sebou hlavně při dekódování délky kódového slova jiném než osm bitů. Funkce \textit{get\_n\_bits()} vrací n bitů od  daného offsetu pole bytů. Funkce \textit{change\_row\_interlaced()} je užitečná pouze v případě prokládaného GIF souboru. Zaručí správné pořadí zpracování řádků daného GIF souboru, tak aby výsledný obrázek byl správně vykreslen.
+	
+\section{Spuštění}
+\label{sec:spusteni}
+
+Parametry programu jsou čtyři. Prvním parametrem je \textit{-i}, za kterým následuje název vstupního GIF souboru (výchozí hodnota je standardní vstup). Dalším parametrem je \textit{-o}, následovaný názvem výstupního BMP souboru (výchozí hodnotou je standardní výstup). Třetím parametrem je \textit{-l}, za kterým následuje název logovacího souboru. Posledním z~parametrů je \textit{-h}, který vypíše nápovědu programu. Žádný z parametrů není povinný, jsou pouze volitelné. V případě nezadání parametru \textit{-l} se žádné logovací informace nevypíšou.
+
+\vspace{6mm}
+{\centering
+gif2bmp [ -h ] [ -i <input\_file> ] [ -o <output\_file> ] [ -l <log\_file> ]\par
+}
+
+\section{Závěr}
+
+Implementace knihovny pro převod souboru z grafického formátu GIF na soubor grafického formátu BMP proběhla úspěšně. Převádět lze soubory GIF s rozličnými velikostmi bitového formátu, obsahující komentáře, text či dokonce animované sekvence obrázků, dokonce také obrázky prokládané. Výstupní soubor porovnán se vstupním vizuální kontrolou v běžném prohlížeči obrázků.
+
+% ======================================
+% Sources
+% ======================================
+
+\clearpage
+\thispagestyle{empty}
+
+\renewcommand{\refname}{Zdroje}
+\begin{thebibliography}{9}
+
+\bibitem{GIF}
+	Cover Sheet for the GIF89a Specification [online]. [cit. 2018-04-30]. Dostupné z: \url{https://www.w3.org/Graphics/GIF/spec-gif89a.txt}
+\bibitem{whatsinagif}
+	Project: What's In A GIF - Bit by Byte [online]. [cit. 2018-04-30]. Dostupné z: \url{http://www.matthewflickinger.com/lab/whatsinagif/bits_and_bytes.asp}
+\bibitem{lzw}
+	Project: What's In A GIF - LZW Image Data [online]. [cit. 2018-04-30]. Dostupné z: \url{http://www.matthewflickinger.com/lab/whatsinagif/lzw_image_data.asp}
+\bibitem{egff}
+	GIF File Format Summary [online]. [cit. 2018-04-30]. Dostupné z: \url{https://www.fileformat.info/format/gif/egff.htm}
+
+\end{thebibliography}
+
+\end{document}
