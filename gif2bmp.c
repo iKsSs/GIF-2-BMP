@@ -164,7 +164,7 @@ int gif2bmp(tGIF2BMP *gif2bmp, FILE *inputFile, FILE *outputFile) {
 	BYTE extension, ext_type;
 
 	//Graphics Control Extension section
-	BYTE size, transparency, transparentColor, endOfBlock, gce_loaded, img_loaded;
+	BYTE size, packed, transparency, transparentColor, endOfBlock, gce_loaded, img_loaded;
 	WORD delay;
 
 	//Color Table
@@ -344,12 +344,14 @@ case 0x21:
 			readB += fread(&Bnull, sizeof(BYTE), 1, inputFile);
 			readB += fread(&Bnull, sizeof(BYTE), 1, inputFile);
 		} else {
-			readB += fread(&transparency, sizeof(BYTE), 1, inputFile);
+			readB += fread(&packed, sizeof(BYTE), 1, inputFile);
 			readB += fread(&delay, sizeof(WORD), 1, inputFile);
 			readB += fread(&transparentColor, sizeof(BYTE), 1, inputFile);
 			readB += fread(&endOfBlock, sizeof(BYTE), 1, inputFile);
 
-			printDebug(SHOW_EXT,"size\ttransp.\tdelay\ttransp_col\tEOB\n");
+			transparency = 0x01 & packed;
+
+			printDebug(SHOW_EXT,"size\ttranspar.\tdelay\ttransp_col\tEOB\n");
 			printDebug(SHOW_EXT,"%d (%2X)\t%d (%2X)\t%d (%2X)\t%d (%2X)\t%d (%2X)\n",
 					size,size,transparency,transparency,delay,delay,transparentColor,transparentColor,endOfBlock,endOfBlock);
 
@@ -714,7 +716,11 @@ default:
 					item = currItem;
 				 	do {
 				 		//output color (with all members)
-						colorBMP[outCounter++] = item->color;
+				 		if ( !(transparency && transparentColor == currPos) ) {
+							colorBMP[outCounter++] = item->color;
+						} else {
+							outCounter++;
+						}
 						//has more members?
 				 		if ( NULL == item->next ) { break; }
 				 		item = item->next;
@@ -775,7 +781,12 @@ default:
 				}
 			} else {
 				first = 0;
-				colorBMP[outCounter++] = currItem->color;	//first color is only printed out
+				//first color is only printed out
+				if ( !(transparency && transparentColor == currPos) ) {
+					colorBMP[outCounter++] = currItem->color;
+				} else {
+					outCounter++;
+				}
 			}
 		}
 	}
